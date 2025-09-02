@@ -1,0 +1,18 @@
+{
+  "name": "my-app",
+  "private": true,
+  "workspaces": [
+    "download",
+    "electron"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run start --workspace download\" \"npm run dev --workspace electron\"",
+    "build": "npm run build --workspace download && npm run build --workspace electron",
+    "dist": "npm run dist --workspace electron"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^1.0.0",
+    "electron-builder": "^26.0.12"
+  }
+}
