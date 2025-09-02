@@ -1,15 +1,12 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
+
+const isElectron = process.env.ELECTRON === "true";
 
 const nextConfig: NextConfig = {
-  output: "export", // ✅ enables static export
-  typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
-  images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: 'placehold.co', port: '', pathname: '/**' },
-      { protocol: 'https', hostname: 'picsum.photos', port: '', pathname: '/**' },
-    ],
-  },
+  output: "export",
+  images: { unoptimized: true },
+  assetPrefix: isElectron ? "./" : undefined, // important for electron
+  basePath: isElectron ? "" : undefined,
 };
 
 export default nextConfig;

@@ -2,6 +2,7 @@
   "name": "nextn",
   "version": "0.1.0",
   "private": true,
+  "main": "main.js",
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
@@ -10,7 +11,9 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "export": "next export"
+    "export": "next export",
+    "electron": "electron .",
+    "electron:build": "next build && electron ."
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",
@@ -55,6 +58,7 @@
     "recharts": "^2.15.1",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
+    "tslib": "^2.8.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -62,11 +66,12 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.21",
+    "electron": "^26.2.0",
     "electron-builder": "^26.0.12",
     "genkit-cli": "^1.14.1",
     "picocolors": "^1.1.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5"
+    "typescript": "5.9.2"
   }
 }
