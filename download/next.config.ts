@@ -5,7 +5,7 @@ const isElectron = process.env.ELECTRON === "true";
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
-  assetPrefix: isElectron ? "./" : undefined, // important for electron
+  assetPrefix: isElectron ? "./" : undefined,
   basePath: isElectron ? "" : undefined,
 };
 

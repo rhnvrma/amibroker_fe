@@ -2,6 +2,8 @@
   "name": "nextn",
   "version": "0.1.0",
   "private": true,
+  "description": "A modern Watchlist Manager",
+  "author": "Your Name",
   "main": "main.js",
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
@@ -10,10 +12,23 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "export": "next export",
+    "typecheck": "tsc --noEmit", 
+    "export": "next build",
     "electron": "electron .",
-    "electron:build": "next build && electron ."
+    "electron:build": "next build && electron .",
+    "dist": "cross-env ELECTRON=true npm run export && electron-builder"
+  },
+  "build": {
+    "appId": "com.example.watchtower",
+    "productName": "Watchtower",
+    "files": [
+      "out/**/*",
+      "main.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    }
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",
@@ -66,7 +81,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.21",
-    "electron": "^26.2.0",
+    "cross-env": "^10.0.0",
+    "electron": "26.2.0",
     "electron-builder": "^26.0.12",
     "genkit-cli": "^1.14.1",
     "picocolors": "^1.1.1",

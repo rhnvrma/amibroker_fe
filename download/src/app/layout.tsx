@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Watchtower",
@@ -17,7 +14,23 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${inter.variable} font-body antialiased`}>
+      <head>
+        {/*
+          This CSP is configured for development.
+          It allows inline scripts and styles, and loading fonts from Google.
+          For production, you should consider a more restrictive policy.
+        */}
+        <meta
+          http-equiv="Content-Security-Policy"
+          content="
+            default-src 'self';
+            script-src 'self' 'unsafe-inline' 'unsafe-eval';
+            style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+            font-src https://fonts.gstatic.com;
+          "
+        />
+      </head>
+      <body className="font-body antialiased">
         {children}
         <Toaster />
       </body>
