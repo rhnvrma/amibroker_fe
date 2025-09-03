@@ -4,6 +4,9 @@ const zlib = require('zlib');
 async function fetchAndDecompressItems() {
   const url = 'https://huggingface.co/datasets/togethercomputer/RedPajama-Data-V2/resolve/main/sample/documents/2023-06/0007/de_head.json.gz';
 
+  // Log when function is called
+  console.log(`[${new Date().toISOString()}] fetchAndDecompressItems called`);
+
   try {
     const response = await axios({
       url,
@@ -18,8 +21,6 @@ async function fetchAndDecompressItems() {
       .filter(line => line.trim() !== '')
       .map(line => JSON.parse(line));
 
-    // Assuming the JSON objects have a structure that matches our WatchlistItem
-    // We may need to map the fields if they are different
     return items.map((item, index) => ({
       id: `item-${Date.now()}-${index}`,
       name: item.name || "Unknown",

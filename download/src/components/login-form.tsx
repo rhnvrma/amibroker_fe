@@ -139,7 +139,7 @@ async function onSubmit(data: LoginFormValues) {
                   <div className="flex w-full items-center space-x-2">
                     <FormControl>
                       <Input
-                        placeholder="Select the application's root folder"
+                        placeholder="Select the amibroker's root folder"
                         readOnly
                         {...field}
                       />

@@ -26,7 +26,7 @@ interface WatchlistContextType {
   deleteItems: (itemIds: string[]) => void;
   importWatchlist: (file: File) => void;
   exportWatchlist: () => void;
-  refreshItems: () => Promise<void>;
+  refreshItems: (showToast?: boolean) => Promise<void>;
   availableItems: Omit<WatchlistItem, "id" | "dateAdded">[];
   exportDefaultWatchlistCsv: () => void;
 }
@@ -67,15 +67,17 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const [_, setRefreshed] = useState(false);
 
-  const refreshItems = useCallback(async () => {
+  const refreshItems = useCallback(async (showToast: boolean = true) => {
     try {
       const items = await window.electron.refreshItems();
       updateAvailableItems(items);
-      setRefreshed(r => !r); // a simple way to trigger re-render
-      toast({
-        title: "Items refreshed",
-        description: "The list of available items has been updated.",
-      });
+      setRefreshed(r => !r);
+      if (showToast) {
+        toast({
+          title: "Items refreshed",
+          description: "The list of available items has been updated.",
+        });
+      }
     } catch (error) {
       console.error("Failed to refresh items", error);
       toast({
@@ -86,16 +88,21 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toast]);
 
+  // COMBINED EFFECT for initial startup logic
   useEffect(() => {
-    refreshItems();
-  }, [refreshItems]);
+    const initializeData = async () => {
+      // Refresh items silently on startup without a toast
+      await refreshItems(false);
 
-  useEffect(() => {
-    const data = getInitialState();
-    setWatchlists(data);
-    const defaultWatchlist = data.find((wl: Watchlist) => wl.isDefault);
-    setActiveWatchlistId(defaultWatchlist ? defaultWatchlist.id : data[0]?.id || null);
-  }, []);
+      // Then load watchlists from local storage
+      const data = getInitialState();
+      setWatchlists(data);
+      const defaultWatchlist = data.find((wl: Watchlist) => wl.isDefault);
+      setActiveWatchlistId(defaultWatchlist ? defaultWatchlist.id : data[0]?.id || null);
+    };
+
+    initializeData();
+  }, [refreshItems]);
 
   useEffect(() => {
     // This effect persists changes to watchlists back to localStorage.
@@ -270,7 +277,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const filename = `${defaultWatchlist.name.replace(/\s+/g, '_')}.csv`;
+    const filename = `new_stocks.csv`;
     window.electron.exportWatchlistCsv(defaultWatchlist, filename);
 
     toast({ title: `Watchlist "${defaultWatchlist.name}" exported.` });

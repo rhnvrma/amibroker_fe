@@ -81,7 +81,9 @@ ipcMain.handle("clear-store", () => {
 ipcMain.handle("export-watchlist-csv", (event, { watchlist, filename }) => {
   try {
     const csvData = convertToCSV(watchlist);
-    const filePath = path.join(app.getAppPath(), '..', filename);
+    const credentials = store.get('credentials');
+    const exportPath = credentials && credentials.rootFolder ? credentials.rootFolder : app.getPath('desktop');
+    const filePath = path.join(exportPath, filename);
     fs.writeFileSync(filePath, csvData);
     return { success: true, path: filePath };
   } catch (error) {
