@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -11,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CheckCircle } from "lucide-react";
+import { useWatchlist } from "@/contexts/watchlist-context";
 
 interface FinalizeDialogProps {
   isOpen: boolean;
@@ -21,6 +21,12 @@ export function FinalizeDialog({
   isOpen,
   setIsOpen,
 }: FinalizeDialogProps) {
+  const { exportDefaultWatchlistCsv } = useWatchlist();
+
+  const handleFinalize = () => {
+    exportDefaultWatchlistCsv();
+    setIsOpen(false);
+  }
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
@@ -36,9 +42,7 @@ export function FinalizeDialog({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogAction
-            onClick={() => {
-              setIsOpen(false);
-            }}
+            onClick={handleFinalize}
           >
             OK
           </AlertDialogAction>
@@ -47,4 +51,3 @@ export function FinalizeDialog({
     </AlertDialog>
   );
 }
-

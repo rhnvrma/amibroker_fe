@@ -1,8 +1,11 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain,dialog  } = require("electron");
 const path = require("path");
 const url = require("url");
 const Store = require("electron-store");
 const { loginToUpstox } = require("./src/lib/upstox-api");
+const { fetchAndDecompressItems } = require("./src/lib/item-updater");
+const fs = require('fs');
+const { convertToCSV } = require("./src/lib/csv-utils");
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -67,14 +70,46 @@ ipcMain.handle("get-credentials", () => {
 });
 
 ipcMain.handle("refresh-items", async () => {
-    // In a real application, you would fetch this from an external API
-    const result = await mockExternalLogin({}); // re-using the mock login for data
-    return result.refreshedItems;
+    return await fetchAndDecompressItems();
 });
+
 ipcMain.handle("clear-store", () => {
   store.clear();
   return { success: true, message: "Credentials cleared." };
 });
 
+ipcMain.handle("export-watchlist-csv", (event, { watchlist, filename }) => {
+  try {
+    const csvData = convertToCSV(watchlist);
+    const filePath = path.join(app.getAppPath(), '..', filename);
+    fs.writeFileSync(filePath, csvData);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error("Failed to export watchlist to CSV", error);
+    return { success: false, error: error.message };
+  }
+});
+ipcMain.handle('select-folder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  if (canceled) {
+    return;
+  } else {
+    return filePaths[0];
+  }
+});
+ipcMain.handle('save-credentials', async (event, credentials) => {
+  try {
+    console.log('Main Process: Received credentials to save:', credentials);
+    // Add your logic here to save the credentials securely
+    // For example, using electron-store:
+    // store.set('user-credentials', credentials);
 
+    return { success: true }; // Acknowledge that the save was successful
+  } catch (error) {
+    console.error('Failed to save credentials:', error);
+    return { success: false, error: error.message };
+  }
+});
 app.whenReady().then(createWindow);

@@ -11,6 +11,7 @@ const otpauth = require('otpauth');
  * @param {string} credentials.mobileNumber
  * @param {string} credentials.pin
  * @param {string} credentials.toptSecret
+ * @param {string} credentials.export_path
  * @returns {Promise<object>} - A promise that resolves with the login result.
  */
 async function loginToUpstox(credentials) {
@@ -20,7 +21,7 @@ async function loginToUpstox(credentials) {
     const { wrapper } = await import('axios-cookiejar-support');
 
     // Destructure credentials for easier use
-    const { apiKey, apiSecret, mobileNumber, pin, toptSecret } = credentials;
+    const {export_path,apiKey, apiSecret, mobileNumber, pin, toptSecret } = credentials;
 
     // Define constant URLs
     const BASE_URL = "https://api.upstox.com/v2";

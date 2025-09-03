@@ -1,12 +1,16 @@
-
 "use client";
 
 import type { Watchlist, WatchlistItem } from "@/lib/types";
 import { initialData } from "@/lib/initial-data";
 import { useToast } from "@/hooks/use-toast";
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { availableItems } from "@/lib/available-items";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 
+// This will hold the items fetched from the backend.
+let availableItems: Omit<WatchlistItem, "id" | "dateAdded">[] = [];
+
+export function updateAvailableItems(items: Omit<WatchlistItem, "id" | "dateAdded">[]) {
+  availableItems = items;
+}
 interface WatchlistContextType {
   watchlists: Watchlist[];
   activeWatchlist: Watchlist | null;
@@ -22,11 +26,14 @@ interface WatchlistContextType {
   deleteItems: (itemIds: string[]) => void;
   importWatchlist: (file: File) => void;
   exportWatchlist: () => void;
+  refreshItems: () => Promise<void>;
+  availableItems: Omit<WatchlistItem, "id" | "dateAdded">[];
+  exportDefaultWatchlistCsv: () => void;
 }
 
 const WatchlistContext = createContext<WatchlistContextType | null>(null);
 
-const LOCAL_STORAGE_KEY = "watchtower_data_v2"; // Changed key for new data structure
+const LOCAL_STORAGE_KEY = "watchtower_data_v2";
 
 // Helper to get initial state
 const getInitialState = () => {
@@ -58,6 +65,30 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [activeWatchlistId, setActiveWatchlistId] = useState<string | null>(null);
   const { toast } = useToast();
+  const [_, setRefreshed] = useState(false);
+
+  const refreshItems = useCallback(async () => {
+    try {
+      const items = await window.electron.refreshItems();
+      updateAvailableItems(items);
+      setRefreshed(r => !r); // a simple way to trigger re-render
+      toast({
+        title: "Items refreshed",
+        description: "The list of available items has been updated.",
+      });
+    } catch (error) {
+      console.error("Failed to refresh items", error);
+      toast({
+        variant: "destructive",
+        title: "Refresh failed",
+        description: "Could not update the list of available items.",
+      });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    refreshItems();
+  }, [refreshItems]);
 
   useEffect(() => {
     const data = getInitialState();
@@ -228,6 +259,23 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     toast({ title: "Watchlist exported." });
   };
 
+  const exportDefaultWatchlistCsv = () => {
+    const defaultWatchlist = watchlists.find(wl => wl.isDefault);
+    if (!defaultWatchlist) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: "No default watchlist set.",
+      });
+      return;
+    }
+
+    const filename = `${defaultWatchlist.name.replace(/\s+/g, '_')}.csv`;
+    window.electron.exportWatchlistCsv(defaultWatchlist, filename);
+
+    toast({ title: `Watchlist "${defaultWatchlist.name}" exported.` });
+  };
+
   return (
     <WatchlistContext.Provider
       value={{
@@ -245,6 +293,9 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         deleteItems,
         importWatchlist,
         exportWatchlist,
+        refreshItems,
+        availableItems,
+        exportDefaultWatchlistCsv,
       }}
     >
       {children}

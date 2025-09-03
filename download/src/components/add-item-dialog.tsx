@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -17,7 +16,6 @@ import type { WatchlistItem } from "@/lib/types";
 import { useState, useMemo, type ReactNode, useRef } from "react";
 import { Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { availableItems } from "@/lib/available-items";
 import { ScrollArea } from "./ui/scroll-area";
 import { Checkbox } from "./ui/checkbox";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -27,7 +25,7 @@ interface AddItemDialogProps {
 }
 
 export function AddItemDialog({ children }: AddItemDialogProps) {
-  const { addItems, activeWatchlist } = useWatchlist();
+  const { addItems, activeWatchlist, availableItems } = useWatchlist();
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,7 +49,7 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
       );
     }
     return items;
-  }, [searchTerm, activeWatchlist]);
+  }, [searchTerm, activeWatchlist, availableItems]);
 
   const rowVirtualizer = useVirtualizer({
     count: filteredItems.length,
