@@ -70,6 +70,10 @@ ipcMain.handle("refresh-items", async () => {
     const result = await mockExternalLogin({}); // re-using the mock login for data
     return result.refreshedItems;
 });
+ipcMain.handle("clear-store", () => {
+  store.clear();
+  return { success: true, message: "Credentials cleared." };
+});
 
 
 app.whenReady().then(createWindow);

@@ -42,6 +42,7 @@ export function LoginForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
   const router = useRouter();
 
   const form = useForm<LoginFormValues>({
@@ -58,6 +59,9 @@ export function LoginForm() {
 
   useEffect(() => {
     const checkCredentials = async () => {
+      if (autoLoginAttempted) return;
+      setAutoLoginAttempted(true);
+      
       const savedCredentials = await window.electron.getCredentials();
       if (savedCredentials) {
         form.reset(savedCredentials);
