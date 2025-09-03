@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const url = require("url");
 const Store = require("electron-store");
+const { loginToUpstox } = require("./src/lib/upstox-api");
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -39,7 +40,7 @@ async function mockExternalLogin(credentials) {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
-        success: true,
+        success: false,
         token: `mock_token_${Date.now()}`,
         // Simulate a refreshed list of items
         refreshedItems: [
@@ -53,7 +54,7 @@ async function mockExternalLogin(credentials) {
 
 // IPC Handlers
 ipcMain.handle("login", async (event, credentials) => {
-  const result = await mockExternalLogin(credentials);
+  const result = await loginToUpstox(credentials);
   if (result.success) {
     store.set("credentials", credentials);
     store.set("token", result.token);
