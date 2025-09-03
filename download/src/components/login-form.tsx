@@ -24,7 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from 'next/link';
 
 const formSchema = z.object({
@@ -42,8 +42,8 @@ export function LoginForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(formSchema),
@@ -59,17 +59,18 @@ export function LoginForm() {
 
   useEffect(() => {
     const checkCredentials = async () => {
-      if (autoLoginAttempted) return;
-      setAutoLoginAttempted(true);
-      
       const savedCredentials = await window.electron.getCredentials();
       if (savedCredentials) {
         form.reset(savedCredentials);
-        onSubmit(savedCredentials);
+        const changeCredentials = searchParams.get('changeCredentials');
+        if (changeCredentials !== 'true') {
+          // Trigger form submission for auto-login
+          onSubmit(savedCredentials);
+        }
       }
     };
     checkCredentials();
-  }, []);
+  }, [searchParams, form.reset]);
 
   async function onSubmit(data: LoginFormValues) {
     setIsLoading(true);

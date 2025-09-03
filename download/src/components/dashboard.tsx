@@ -45,7 +45,7 @@ export function Dashboard() {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/">
+              <Link href="/?change=true">
                 <SidebarMenuButton className="w-full">
                   <KeyRound />
                   Generate Token
