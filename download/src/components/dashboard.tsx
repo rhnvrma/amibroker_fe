@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -18,10 +17,13 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "./ui/sidebar";
-import { KeyRound } from "lucide-react";
+import { KeyRound, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useWatchlist } from "@/contexts/watchlist-context";
 
 export function Dashboard() {
+  const { refreshItems } = useWatchlist();
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -37,6 +39,12 @@ export function Dashboard() {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
+              <SidebarMenuButton className="w-full" onClick={refreshItems}>
+                <RefreshCw />
+                Refresh Items
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <Link href="/">
                 <SidebarMenuButton className="w-full">
                   <KeyRound />
@@ -51,7 +59,9 @@ export function Dashboard() {
         <div className="p-4 md:p-6">
           <div className="flex items-center gap-2 mb-4">
             <SidebarTrigger className="md:hidden" />
-            <h1 className="text-2xl font-semibold grow md:hidden">Watchtower</h1>
+            <h1 className="text-2xl font-semibold grow md:hidden">
+              Watchtower
+            </h1>
           </div>
           <WatchlistContent />
         </div>

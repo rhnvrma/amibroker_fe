@@ -1,6 +1,5 @@
-import { ReactNode } from "react";
-import { WatchlistProvider } from "@/contexts/watchlist-context";
+import { Dashboard } from "@/components/dashboard";
 
-export default function DashboardLayout({ children }: React.PropsWithChildren) {
-  return <WatchlistProvider>{children}</WatchlistProvider>;
+export default function DashboardPage() {
+  return <Dashboard />;
 }

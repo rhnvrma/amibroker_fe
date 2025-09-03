@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -39,21 +38,6 @@ const formSchema = z.object({
 
 type LoginFormValues = z.infer<typeof formSchema>;
 
-// Mock function to simulate API login
-const mockLogin = async (data: LoginFormValues): Promise<{ accessToken: string }> => {
-    console.log("Login attempt with:", data);
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            // Simulate a 50% chance of failure
-            if (Math.random() > 0.5) {
-                resolve({ accessToken: `mock_access_token_${new Date().getTime()}` });
-            } else {
-                reject(new Error("Failed to authenticate"));
-            }
-        }, 1500);
-    });
-};
-
 export function LoginForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -72,17 +56,32 @@ export function LoginForm() {
     },
   });
 
+  useEffect(() => {
+    const checkCredentials = async () => {
+      const savedCredentials = await window.electron.getCredentials();
+      if (savedCredentials) {
+        form.reset(savedCredentials);
+        onSubmit(savedCredentials);
+      }
+    };
+    checkCredentials();
+  }, []);
+
   async function onSubmit(data: LoginFormValues) {
     setIsLoading(true);
     setAccessToken(null);
     try {
-      const response = await mockLogin(data);
-      setAccessToken(response.accessToken);
-      toast({
-        title: "Login Successful",
-        description: "Redirecting to dashboard...",
-      });
-      setTimeout(() => router.push('/dashboard'), 2000);
+      const response = await window.electron.login(data);
+      if (response.success) {
+        setAccessToken(response.token);
+        toast({
+          title: "Login Successful",
+          description: "Redirecting to dashboard...",
+        });
+        setTimeout(() => router.push('/dashboard'), 2000);
+      } else {
+        throw new Error("Login failed");
+      }
     } catch (error) {
       toast({
         variant: "destructive",
