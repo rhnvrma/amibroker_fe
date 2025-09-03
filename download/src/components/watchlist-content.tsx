@@ -82,10 +82,6 @@ export function WatchlistContent() {
         watchlistName={activeWatchlist.name}
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
-        sortKey={sortKey}
-        setSortKey={setSortKey}
-        sortDirection={sortDirection}
-        setSortDirection={setSortDirection}
         selectedItemIds={selectedItemIds}
         setSelectedItemIds={setSelectedItemIds}
       />

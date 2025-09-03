@@ -1,8 +1,10 @@
+
 "use client";
 
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarInset,
   SidebarProvider,
@@ -11,6 +13,13 @@ import {
 import { SidebarNav } from "@/components/sidebar-nav";
 import { WatchtowerLogo } from "@/components/icons";
 import { WatchlistContent } from "@/components/watchlist-content";
+import {
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from "./ui/sidebar";
+import { KeyRound } from "lucide-react";
+import Link from "next/link";
 
 export function Dashboard() {
   return (
@@ -25,6 +34,18 @@ export function Dashboard() {
         <SidebarContent className="flex flex-col">
           <SidebarNav />
         </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <Link href="/">
+                <SidebarMenuButton className="w-full">
+                  <KeyRound />
+                  Generate Token
+                </SidebarMenuButton>
+              </Link>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <div className="p-4 md:p-6">

@@ -21,7 +21,7 @@ export default function RootLayout({
           For production, you should consider a more restrictive policy.
         */}
         <meta
-          http-equiv="Content-Security-Policy"
+          httpEquiv="Content-Security-Policy"
           content="
             default-src 'self';
             script-src 'self' 'unsafe-inline' 'unsafe-eval';

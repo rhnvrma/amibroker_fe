@@ -4,31 +4,19 @@
 import { AddItemDialog } from "@/components/add-item-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useWatchlist } from "@/contexts/watchlist-context";
 import type { WatchlistItem } from "@/lib/types";
-import { ArrowDown, ArrowUp, Plus, Search, Trash2, CheckCircle } from "lucide-react";
+import { Plus, Search, Trash2, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import { DeleteDialog } from "./delete-dialog";
 import { FinalizeDialog } from "./finalize-dialog";
 
 type SortKey = keyof Omit<WatchlistItem, 'id'>;
-type SortDirection = "asc" | "desc";
 
 interface WatchlistHeaderProps {
   watchlistName: string;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  sortKey: SortKey;
-  setSortKey: (key: SortKey) => void;
-  sortDirection: SortDirection;
-  setSortDirection: (dir: SortDirection) => void;
   selectedItemIds: string[];
   setSelectedItemIds: (ids: string[]) => void;
 }
@@ -37,20 +25,12 @@ export function WatchlistHeader({
   watchlistName,
   searchTerm,
   setSearchTerm,
-  sortKey,
-  setSortKey,
-  sortDirection,
-  setSortDirection,
   selectedItemIds,
   setSelectedItemIds,
 }: WatchlistHeaderProps) {
   const { deleteItems } = useWatchlist();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
-
-  const handleSortDirectionToggle = () => {
-    setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-  }
 
   const handleDeleteSelected = () => {
     deleteItems(selectedItemIds);
@@ -74,21 +54,6 @@ export function WatchlistHeader({
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="dateAdded">Date Added</SelectItem>
-              <SelectItem value="trading_symbol">Trading Symbol</SelectItem>
-              <SelectItem value="name">Name</SelectItem>
-              <SelectItem value="strike_price">Strike Price</SelectItem>
-              <SelectItem value="instrument_key">Instrument Key</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="icon" onClick={handleSortDirectionToggle}>
-              {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-          </Button>
 
           {numSelected > 0 ? (
             <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>

@@ -1,10 +1,12 @@
-import { Dashboard } from "@/components/dashboard";
-import { WatchlistProvider } from "@/contexts/watchlist-context";
+
+"use client";
+
+import { LoginForm } from "@/components/login-form";
 
 export default function Home() {
   return (
-    <WatchlistProvider>
-      <Dashboard />
-    </WatchlistProvider>
+    <div className="flex items-center justify-center min-h-screen bg-background p-4">
+      <LoginForm />
+    </div>
   );
 }
