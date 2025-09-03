@@ -166,25 +166,6 @@ export function LoginForm() {
                 </FormItem>
               )}
             />
-             <FormField
-              control={form.control}
-              name="autoAddSymbols"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 shadow">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>
-                        Auto-add symbols from AmiBroker
-                    </FormLabel>
-                  </div>
-                </FormItem>
-              )}
-            />
           </CardContent>
           <CardFooter className="flex flex-col items-start gap-4">
             <div className="w-full flex flex-col sm:flex-row items-center gap-2">
