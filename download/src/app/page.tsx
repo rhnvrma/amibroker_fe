@@ -1,15 +1,22 @@
 // src/app/page.tsx
 "use client";
 
+import { Dashboard } from "@/components/dashboard";
 import { LoginForm } from "@/components/login-form";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useWatchlist, updateAvailableItems } from "@/contexts/watchlist-context";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 function ClientPage() {
   const [showLogin, setShowLogin] = useState(false);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { refreshItems } = useWatchlist();
@@ -30,9 +37,12 @@ function ClientPage() {
             updateAvailableItems(response.refreshedItems);
             toast({
               title: "Login Successful",
-              description: "Credentials saved. Redirecting to dashboard...",
+              description: "Credentials saved.",
             });
-            setTimeout(() => router.push('/dashboard?refreshItems=true'), 2000);
+            if (searchParams.get('refreshItems') === 'true') {
+                refreshItems();
+            }
+            setShowLogin(false);
           } else {
             setShowLogin(true);
           }
@@ -44,21 +54,31 @@ function ClientPage() {
       }
     };
 
-    autoLogin();
-  }, [router, searchParams, toast]);
+    if (typeof window.electron !== 'undefined') {
+        autoLogin();
+    }
+  }, [searchParams, toast, refreshItems]);
 
-  if (!showLogin) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background p-4">
-        <p>Attempting to log in automatically...</p>
-      </div>
-    );
-  }
+  const handleLoginSuccess = () => {
+    setShowLogin(false);
+    refreshItems(true);
+  };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <LoginForm />
-    </div>
+    <>
+      <Dashboard />
+      <Dialog open={showLogin} onOpenChange={setShowLogin}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Login</DialogTitle>
+            <DialogDescription>
+              Enter your credentials to access your watchlist.
+            </DialogDescription>
+          </DialogHeader>
+          <LoginForm onLoginSuccess={handleLoginSuccess} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

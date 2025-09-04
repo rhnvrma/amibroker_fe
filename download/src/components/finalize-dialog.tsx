@@ -23,8 +23,9 @@ export function FinalizeDialog({
 }: FinalizeDialogProps) {
   const { exportDefaultWatchlistCsv } = useWatchlist();
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     exportDefaultWatchlistCsv();
+    await window.electron.saveAccessToken();
     setIsOpen(false);
   }
 

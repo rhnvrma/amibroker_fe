@@ -268,7 +268,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     toast({ title: "Watchlist exported." });
   };
 
-  const exportDefaultWatchlistCsv = () => {
+  const exportDefaultWatchlistCsv = async () => {
     const defaultWatchlist = watchlists.find(wl => wl.isDefault);
     if (!defaultWatchlist) {
       toast({
@@ -280,9 +280,20 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     }
 
     const filename = `new_stocks.csv`;
-    window.electron.exportWatchlistCsv(defaultWatchlist, filename);
-
-    toast({ title: `Watchlist "${defaultWatchlist.name}" exported.` });
+    try {
+      const result = await window.electron.exportWatchlistCsv(defaultWatchlist, filename);
+      if (result.success) {
+        toast({ title: `Watchlist "${defaultWatchlist.name}" exported.` });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: (error as Error).message,
+      });
+    }
   };
 
   return (

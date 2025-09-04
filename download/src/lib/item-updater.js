@@ -21,7 +21,7 @@ async function fetchAndDecompressItems() {
     const items = JSON.parse(decompressed.toString());
 
     // 🔍 Log first 3 raw entries for debugging
-    console.log("Raw uncompressed sample:", items.slice(0, 3));
+    // console.log("Raw uncompressed sample:", items.slice(0, 3));
 
     // ✅ Whitelist fields
     const mappedItems = items.map((item, index) => ({
@@ -39,7 +39,7 @@ async function fetchAndDecompressItems() {
     }));
 
     // 🔍 Log mapped entries for verification
-    console.log("Mapped entries:", mappedItems.slice(0, 5));
+    // console.log("Mapped entries:", mappedItems.slice(0, 5));
 
     return mappedItems;
     

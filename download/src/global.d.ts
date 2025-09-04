@@ -12,6 +12,7 @@ declare global {
       exportWatchlistCsv: (watchlist: Watchlist, filename: string) => Promise<any>;
       selectFolder: () => Promise<string | undefined>;
       saveCredentials: (data: any) => Promise<any>;
+      saveAccessToken: () => Promise<any>;
     };
   }
 }

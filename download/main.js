@@ -93,6 +93,24 @@ ipcMain.handle("export-watchlist-csv", (event, { watchlist, filename }) => {
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle("save-access-token", () => {
+  try {
+    const token = store.get('token');
+    if (!token) {
+      throw new Error("No access token found in store.");
+    }
+    const credentials = store.get('credentials');
+    const exportPath = credentials && credentials.rootFolder ? credentials.rootFolder : app.getPath('desktop');
+    const filePath = path.join(exportPath, 'access_token.txt');
+    fs.writeFileSync(filePath, token);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error("Failed to save access token", error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('select-folder', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     properties: ['openDirectory']

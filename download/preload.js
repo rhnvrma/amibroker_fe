@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld("electron", {
   exportWatchlistCsv: (watchlist, filename) => ipcRenderer.invoke("export-watchlist-csv", { watchlist, filename }),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   saveCredentials: (data) => ipcRenderer.invoke('save-credentials', data),
+  saveAccessToken: () => ipcRenderer.invoke('save-access-token'),
 });
