@@ -19,6 +19,7 @@ export const initialData: Watchlist[] = [
         trading_symbol: "NIFTY 28MAR24 22000 CE",
         strike_price: 22000,
         expiry: new Date("2024-03-28T10:00:00Z").toISOString(),
+        dateAdded: new Date().toISOString(),
       },
       {
         id: "item2",
@@ -31,6 +32,7 @@ export const initialData: Watchlist[] = [
         trading_symbol: "NIFTY 28MAR24 22000 PE",
         strike_price: 22000,
         expiry: new Date("2024-03-28T11:30:00Z").toISOString(),
+        dateAdded: new Date().toISOString(),
       },
     ],
   },
@@ -50,6 +52,7 @@ export const initialData: Watchlist[] = [
         trading_symbol: "BANKNIFTY 27MAR24 46500 CE",
         strike_price: 46500,
         expiry: new Date("2024-03-27T14:00:00Z").toISOString(),
+        dateAdded: new Date().toISOString(),
       },
     ],
   },

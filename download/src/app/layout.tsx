@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { WatchlistProvider } from "@/contexts/watchlist-context";
+import { LoginDialogProvider } from "@/contexts/login-dialog-context";
 
 export const metadata: Metadata = {
   title: "Watchtower",
@@ -34,7 +35,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <WatchlistProvider>
-          {children}
+          <LoginDialogProvider>{children}</LoginDialogProvider>
         </WatchlistProvider>
         <Toaster />
       </body>

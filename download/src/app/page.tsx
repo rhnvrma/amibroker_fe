@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useWatchlist, updateAvailableItems } from "@/contexts/watchlist-context";
+import { useLoginDialog } from "@/contexts/login-dialog-context";
 import {
   Dialog,
   DialogContent,
@@ -16,19 +17,13 @@ import {
 } from "@/components/ui/dialog";
 
 function ClientPage() {
-  const [showLogin, setShowLogin] = useState(false);
+  const { isLoginDialogOpen, openLoginDialog, closeLoginDialog } = useLoginDialog();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const { refreshItems } = useWatchlist();
 
   useEffect(() => {
     const autoLogin = async () => {
-      const changeCredentials = searchParams.get('changeCredentials');
-      if (changeCredentials === 'true') {
-        setShowLogin(true);
-        return;
-      }
-
       const savedCredentials = await window.electron.getCredentials();
       if (savedCredentials) {
         try {
@@ -42,32 +37,31 @@ function ClientPage() {
             if (searchParams.get('refreshItems') === 'true') {
                 refreshItems();
             }
-            setShowLogin(false);
           } else {
-            setShowLogin(true);
+            openLoginDialog();
           }
         } catch (error) {
-          setShowLogin(true);
+          openLoginDialog();
         }
       } else {
-        setShowLogin(true);
+        openLoginDialog();
       }
     };
 
     if (typeof window.electron !== 'undefined') {
         autoLogin();
     }
-  }, [searchParams, toast, refreshItems]);
+  }, [searchParams, toast, refreshItems, openLoginDialog]);
 
   const handleLoginSuccess = () => {
-    setShowLogin(false);
+    closeLoginDialog();
     refreshItems(true);
   };
 
   return (
     <>
       <Dashboard />
-      <Dialog open={showLogin} onOpenChange={setShowLogin}>
+      <Dialog open={isLoginDialogOpen} onOpenChange={(open) => !open && closeLoginDialog()}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Login</DialogTitle>

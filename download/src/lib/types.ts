@@ -9,6 +9,7 @@ export interface WatchlistItem {
   trading_symbol: string;
   strike_price: number;
   expiry: string; 
+  dateAdded: string;
 }
 
 export interface Watchlist {

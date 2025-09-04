@@ -19,12 +19,13 @@ import {
   SidebarMenuButton,
 } from "./ui/sidebar";
 import { KeyRound, RefreshCw } from "lucide-react";
-import Link from "next/link";
 import { useWatchlist } from "@/contexts/watchlist-context";
+import { useLoginDialog } from "@/contexts/login-dialog-context";
 import { isElectron } from "@/lib/utils";
 
 export function Dashboard() {
   const { refreshItems } = useWatchlist();
+  const { openLoginDialog } = useLoginDialog();
 
   return (
     <SidebarProvider>
@@ -47,12 +48,13 @@ export function Dashboard() {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Link href="/?changeCredentials=true">
-                <SidebarMenuButton className="w-full">
-                  <KeyRound />
-                  Generate Token
-                </SidebarMenuButton>
-              </Link>
+              <SidebarMenuButton
+                className="w-full"
+                onClick={() => openLoginDialog()}
+              >
+                <KeyRound />
+                Generate Token
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
