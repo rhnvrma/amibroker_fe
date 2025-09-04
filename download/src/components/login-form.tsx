@@ -99,11 +99,9 @@ async function onSubmit(data: LoginFormValues) {
                 description: "Credentials saved. Redirecting to dashboard...",
             });
             // Conditional navigation based on environment
-            if (isElectron()) {
-              setTimeout(() => window.location.href = './dashboard.html', 2000);
-            } else {
-              setTimeout(() => router.push('/dashboard'), 2000);
-            }
+            
+            setTimeout(() => router.push('/dashboard'), 2000);
+            
         } else {
             throw new Error(response.error || "An unknown error occurred on the server.");
         }

@@ -23,7 +23,7 @@ import { useWatchlist } from "@/contexts/watchlist-context";
 import { isElectron } from "@/lib/utils";
 
 export function Dashboard() {
-  const { refreshItems } = useWatchlist();
+  // const { refreshItems } = useWatchlist();
 
   return (
     <SidebarProvider>
@@ -46,21 +46,12 @@ export function Dashboard() {
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              {isElectron() ? (
-              <a href="index.html?changeCredentials=true">
-                <SidebarMenuButton className="w-full">
-                  <KeyRound />
-                  Generate Token
-                </SidebarMenuButton>
-              </a>
-            ) : (
               <Link href="/?changeCredentials=true">
                 <SidebarMenuButton className="w-full">
                   <KeyRound />
                   Generate Token
                 </SidebarMenuButton>
               </Link>
-            )}
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

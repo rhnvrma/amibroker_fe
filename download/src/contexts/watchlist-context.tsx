@@ -69,10 +69,10 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
 
   const refreshItems = useCallback(async (showToast: boolean = true) => {
     try {
+      if (showToast) {
       const items = await window.electron.refreshItems();
       updateAvailableItems(items);
       setRefreshed(r => !r);
-      if (showToast) {
         toast({
           title: "Items refreshed",
           description: "The list of available items has been updated.",
