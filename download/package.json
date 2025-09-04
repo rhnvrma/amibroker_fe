@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "export": "next build",
     "electron": "cross-env NODE_ENV=development electron .",
-    "electron:build": "next build && electron .",
+    "electron:build": "cross-env ELECTRON=true next build && electron .",
     "dist": "cross-env ELECTRON=true npm run export && electron-builder"
   },
   "build": {

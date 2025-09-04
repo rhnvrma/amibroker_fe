@@ -37,7 +37,7 @@ export function FinalizeDialog({
             </div>
           <AlertDialogTitle className="text-center">Changes Finalized</AlertDialogTitle>
           <AlertDialogDescription className="text-center">
-            All your changes have been saved. Please restart the application for them to take full effect.
+            All your changes have been saved. Please restart Amibroker for them to take full effect.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

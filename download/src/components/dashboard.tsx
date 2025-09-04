@@ -20,6 +20,7 @@ import {
 import { KeyRound, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useWatchlist } from "@/contexts/watchlist-context";
+import { isElectron } from "@/lib/utils";
 
 export function Dashboard() {
   const { refreshItems } = useWatchlist();
@@ -39,18 +40,27 @@ export function Dashboard() {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton className="w-full" onClick={refreshItems}>
+               <SidebarMenuButton className="w-full" onClick={() => refreshItems()}>
                 <RefreshCw />
                 Refresh Items
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
+              {isElectron() ? (
+              <a href="index.html?changeCredentials=true">
+                <SidebarMenuButton className="w-full">
+                  <KeyRound />
+                  Generate Token
+                </SidebarMenuButton>
+              </a>
+            ) : (
               <Link href="/?changeCredentials=true">
                 <SidebarMenuButton className="w-full">
                   <KeyRound />
                   Generate Token
                 </SidebarMenuButton>
               </Link>
+            )}
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

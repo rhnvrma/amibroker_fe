@@ -2,10 +2,10 @@
 
 import { LoginForm } from "@/components/login-form";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 
-export default function Home() {
+function ClientPage() {
   const [showLogin, setShowLogin] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,9 +26,9 @@ export default function Home() {
           if (response.success) {
             toast({
               title: "Login Successful",
-              description: "Redirecting to dashboard...",
+              description: "Credentials saved. Redirecting to dashboard...",
             });
-            setTimeout(() => router.push('/dashboard'), 1000);
+            setTimeout(() => router.push('/dashboard?refreshItems=true'), 2000);
           } else {
             setShowLogin(true);
           }
@@ -55,5 +55,13 @@ export default function Home() {
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <LoginForm />
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ClientPage />
+    </Suspense>
   );
 }

@@ -25,7 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import Link from 'next/link';
-
+import { isElectron } from "@/lib/utils";
 // Schema already makes rootFolder mandatory
 const formSchema = z.object({
  rootFolder: z.string().min(1, "Root folder is required."),
@@ -90,11 +90,7 @@ async function onSubmit(data: LoginFormValues) {
     setAccessToken(null);
     try {
         const response = await window.electron.login(data);
-
-        // --- Step 1: Log the ENTIRE response from the backend ---
         console.log("Response from Electron main process:", response);
-        // ---------------------------------------------------------
-
         if (response && response.success) {
             await window.electron.saveCredentials(data);
             setAccessToken(response.token);
@@ -102,25 +98,26 @@ async function onSubmit(data: LoginFormValues) {
                 title: "Login Successful",
                 description: "Credentials saved. Redirecting to dashboard...",
             });
-            setTimeout(() => router.push('/dashboard'), 2000);
+            // Conditional navigation based on environment
+            if (isElectron()) {
+              setTimeout(() => window.location.href = './dashboard.html', 2000);
+            } else {
+              setTimeout(() => router.push('/dashboard'), 2000);
+            }
         } else {
-            // If the login fails, throw an error with the message from the backend
             throw new Error(response.error || "An unknown error occurred on the server.");
         }
     } catch (error) {
-        // --- Step 2: Display the specific error message in the toast ---
         toast({
             variant: "destructive",
             title: "Login Failed",
-            description: error.message, // This will now show the REAL reason!
+            description: error.message,
         });
-        // Also log the error to the browser console for more details
         console.error("Frontend Login Catch Block:", error);
     } finally {
         setIsLoading(false);
     }
 }
-
  return (
   <Card className="w-full max-w-lg">
    <CardHeader>
