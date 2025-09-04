@@ -1,3 +1,4 @@
+// src/contexts/watchlist-context.tsx
 "use client";
 
 import type { Watchlist, WatchlistItem } from "@/lib/types";
@@ -69,10 +70,10 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
 
   const refreshItems = useCallback(async (showToast: boolean = true) => {
     try {
-      if (showToast) {
       const items = await window.electron.refreshItems();
       updateAvailableItems(items);
       setRefreshed(r => !r);
+      if (showToast) {
         toast({
           title: "Items refreshed",
           description: "The list of available items has been updated.",
@@ -92,7 +93,8 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeData = async () => {
       // Refresh items silently on startup without a toast
-      await refreshItems(false);
+      const refreshedItems = await window.electron.refreshItems();
+      updateAvailableItems(refreshedItems);
 
       // Then load watchlists from local storage
       const data = getInitialState();
@@ -102,7 +104,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     };
 
     initializeData();
-  }, [refreshItems]);
+  }, []);
 
   useEffect(() => {
     // This effect persists changes to watchlists back to localStorage.

@@ -1,6 +1,8 @@
+// src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { WatchlistProvider } from "@/contexts/watchlist-context";
 
 export const metadata: Metadata = {
   title: "Watchtower",
@@ -31,7 +33,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        {children}
+        <WatchlistProvider>
+          {children}
+        </WatchlistProvider>
         <Toaster />
       </body>
     </html>

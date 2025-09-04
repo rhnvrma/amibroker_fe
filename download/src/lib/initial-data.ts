@@ -1,4 +1,3 @@
-
 import type { Watchlist } from "@/lib/types";
 
 
@@ -19,7 +18,7 @@ export const initialData: Watchlist[] = [
         minimum_lot: 50,
         trading_symbol: "NIFTY 28MAR24 22000 CE",
         strike_price: 22000,
-        dateAdded: new Date("2023-01-15T10:00:00Z").toISOString(),
+        expiry: new Date("2024-03-28T10:00:00Z").toISOString(),
       },
       {
         id: "item2",
@@ -31,7 +30,7 @@ export const initialData: Watchlist[] = [
         minimum_lot: 50,
         trading_symbol: "NIFTY 28MAR24 22000 PE",
         strike_price: 22000,
-        dateAdded: new Date("2023-02-20T11:30:00Z").toISOString(),
+        expiry: new Date("2024-03-28T11:30:00Z").toISOString(),
       },
     ],
   },
@@ -50,7 +49,7 @@ export const initialData: Watchlist[] = [
         minimum_lot: 15,
         trading_symbol: "BANKNIFTY 27MAR24 46500 CE",
         strike_price: 46500,
-        dateAdded: new Date("2023-03-10T14:00:00Z").toISOString(),
+        expiry: new Date("2024-03-27T14:00:00Z").toISOString(),
       },
     ],
   },

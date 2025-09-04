@@ -40,13 +40,16 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
     let items = availableItems.filter(item => !existingKeys.has(item.instrument_key));
     
     if (searchTerm) {
-      const lowercasedTerm = searchTerm.toLowerCase();
-      items = items.filter(
-        (item) =>
-          item.name.toLowerCase().includes(lowercasedTerm) ||
-          item.trading_symbol.toLowerCase().includes(lowercasedTerm) ||
-          item.instrument_key.toLowerCase().includes(lowercasedTerm)
-      );
+      const searchTerms = searchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
+      items = items.filter(item => {
+        return searchTerms.every(term => 
+          item.name.toLowerCase().includes(term) ||
+          item.trading_symbol.toLowerCase().includes(term) ||
+          item.instrument_key.toLowerCase().includes(term) ||
+          item.strike_price.toString().toLowerCase().includes(term) ||
+          item.segment.toLowerCase().includes(term)
+        );
+      });
     }
     return items;
   }, [searchTerm, activeWatchlist, availableItems]);

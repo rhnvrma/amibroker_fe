@@ -60,7 +60,7 @@ export function WatchlistTable({
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD", // This can be adapted based on instrument currency
+      currency: "INR", // This can be adapted based on instrument currency
     }).format(value);
   };
 

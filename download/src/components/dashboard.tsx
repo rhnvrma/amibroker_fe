@@ -1,3 +1,4 @@
+// src/components/dashboard.tsx
 "use client";
 
 import {
@@ -23,7 +24,7 @@ import { useWatchlist } from "@/contexts/watchlist-context";
 import { isElectron } from "@/lib/utils";
 
 export function Dashboard() {
-  // const { refreshItems } = useWatchlist();
+  const { refreshItems } = useWatchlist();
 
   return (
     <SidebarProvider>
@@ -40,7 +41,7 @@ export function Dashboard() {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-               <SidebarMenuButton className="w-full" onClick={() => refreshItems()}>
+               <SidebarMenuButton className="w-full" onClick={() => refreshItems(true)}>
                 <RefreshCw />
                 Refresh Items
               </SidebarMenuButton>

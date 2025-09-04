@@ -1,4 +1,3 @@
-
 export interface WatchlistItem {
   id: string; // Internal ID for UI state
   name: string;
@@ -9,7 +8,7 @@ export interface WatchlistItem {
   minimum_lot: number;
   trading_symbol: string;
   strike_price: number;
-  dateAdded: string; // Keep for sorting by date
+  expiry: string; 
 }
 
 export interface Watchlist {

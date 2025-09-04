@@ -1,15 +1,18 @@
+// src/app/page.tsx
 "use client";
 
 import { LoginForm } from "@/components/login-form";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useWatchlist, updateAvailableItems } from "@/contexts/watchlist-context";
 
 function ClientPage() {
   const [showLogin, setShowLogin] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { refreshItems } = useWatchlist();
 
   useEffect(() => {
     const autoLogin = async () => {
@@ -24,6 +27,7 @@ function ClientPage() {
         try {
           const response = await window.electron.login(savedCredentials);
           if (response.success) {
+            updateAvailableItems(response.refreshedItems);
             toast({
               title: "Login Successful",
               description: "Credentials saved. Redirecting to dashboard...",

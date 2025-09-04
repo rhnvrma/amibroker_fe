@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain,dialog  } = require("electron");
+// main.js
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const url = require("url");
 const Store = require("electron-store");
@@ -61,6 +62,7 @@ ipcMain.handle("login", async (event, credentials) => {
   if (result.success) {
     store.set("credentials", credentials);
     store.set("token", result.token);
+    result.refreshedItems = await fetchAndDecompressItems();
   }
   return result;
 });

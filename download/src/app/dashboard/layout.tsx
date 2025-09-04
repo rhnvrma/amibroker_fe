@@ -1,10 +1,9 @@
-
-import { WatchlistProvider } from "@/contexts/watchlist-context";
+// src/app/dashboard/layout.tsx
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <WatchlistProvider>{children}</WatchlistProvider>;
+  return <>{children}</>;
 }
