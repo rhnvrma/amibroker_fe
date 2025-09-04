@@ -36,7 +36,7 @@ const tableColumns: { key: SortKey; label: string; className: string }[] = [
     { key: 'name', label: 'Name', className: 'w-[15%] p-2' },
     { key: 'strike_price', label: 'Strike Price', className: 'w-[15%] p-2' },
     { key: 'instrument_key', label: 'Instrument Key', className: 'w-[25%] p-2' },
-    { key: 'dateAdded', label: 'Date Added', className: 'w-[15%] p-2' },
+    { key: 'expiry', label: 'expiry', className: 'w-[15%] p-2' },
 ];
 
 export function WatchlistTable({ 
@@ -147,7 +147,7 @@ export function WatchlistTable({
                 <TableCell className="w-[15%] p-2 flex-shrink-0">{item.name}</TableCell>
                 <TableCell className="w-[15%] p-2 flex-shrink-0">{formatCurrency(item.strike_price)}</TableCell>
                 <TableCell className="w-[25%] p-2 flex-shrink-0 truncate">{item.instrument_key}</TableCell>
-                <TableCell className="w-[15%] p-2 flex-shrink-0">{formatDate(item.dateAdded)}</TableCell>
+                <TableCell className="w-[15%] p-2 flex-shrink-0">{formatDate(item.expiry)}</TableCell>
                 <TableCell className="text-right w-[10%] p-2 flex-shrink-0">
                   <div className="flex justify-end">
                     <ItemActions item={item} />

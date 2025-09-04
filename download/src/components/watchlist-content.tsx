@@ -13,7 +13,7 @@ export function WatchlistContent() {
   const { activeWatchlist } = useWatchlist();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [sortKey, setSortKey] = useState<SortKey>('dateAdded');
+  const [sortKey, setSortKey] = useState<SortKey>('expiry');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   const filteredItems = useMemo(() => {
