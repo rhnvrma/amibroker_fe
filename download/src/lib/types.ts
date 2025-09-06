@@ -10,6 +10,7 @@ export interface WatchlistItem {
   strike_price: number;
   expiry: string; 
   dateAdded: string;
+  expiry_int:number;
 }
 
 export interface Watchlist {

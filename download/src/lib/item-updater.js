@@ -25,6 +25,7 @@ async function fetchAndDecompressItems() {
 
     // ✅ Whitelist fields
     const mappedItems = items.map((item, index) => ({
+      ...item,
       id: `item-${Date.now()}-${index}`,
       name: item.name || "Unknown",
       segment: item.segment || "N/A",
@@ -35,7 +36,9 @@ async function fetchAndDecompressItems() {
       trading_symbol: item.trading_symbol || `SYMBOL-${index}`,
       strike_price: item.strike_price || 0,
       expiry: item.expiry ? new Date(item.expiry).toISOString() : null,
-      dateAdded: new Date().toISOString()
+      dateAdded: new Date().toISOString(),
+      expiry_int: item.expiry ? item.expiry : 0,
+
     }));
 
     // 🔍 Log mapped entries for verification

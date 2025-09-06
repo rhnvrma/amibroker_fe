@@ -7,6 +7,7 @@ const { loginToUpstox } = require("./src/lib/upstox-api");
 const { fetchAndDecompressItems } = require("./src/lib/item-updater");
 const fs = require('fs');
 const { convertToCSV } = require("./src/lib/csv-utils");
+const {convertToJson}=require("./src/lib/json_utils");
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -159,6 +160,19 @@ ipcMain.handle('save-credentials', async (event, credentials) => {
     return { success: true }; // Acknowledge that the save was successful
   } catch (error) {
     console.error('Failed to save credentials:', error);
+    return { success: false, error: error.message };
+  }
+});
+ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
+  try {
+    const jsonData = convertToJson(watchlist);
+    const credentials = store.get('credentials');
+    const exportPath = credentials && credentials.rootFolder ? credentials.rootFolder : app.getPath('desktop');
+    const filePath = path.join(exportPath, filename);
+    fs.writeFileSync(filePath, jsonData);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error("Failed to export watchlist to JSON", error);
     return { success: false, error: error.message };
   }
 });

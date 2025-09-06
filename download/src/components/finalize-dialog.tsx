@@ -21,10 +21,10 @@ export function FinalizeDialog({
   isOpen,
   setIsOpen,
 }: FinalizeDialogProps) {
-  const { exportDefaultWatchlistCsv } = useWatchlist();
+  const { exportDefaultWatchlistJson } = useWatchlist();
 
   const handleFinalize = async () => {
-    exportDefaultWatchlistCsv();
+    exportDefaultWatchlistJson();
     await window.electron.saveAccessToken();
     setIsOpen(false);
   }

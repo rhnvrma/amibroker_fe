@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld("electron", {
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   saveCredentials: (data) => ipcRenderer.invoke('save-credentials', data),
   saveAccessToken: () => ipcRenderer.invoke('save-access-token'),
+  exportWatchlistJson: (watchlist, filename) => ipcRenderer.invoke("export-watchlist-json", { watchlist, filename }),
 });

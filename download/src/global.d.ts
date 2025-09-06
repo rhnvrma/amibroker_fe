@@ -11,6 +11,7 @@ declare global {
       refreshItems: () => Promise<any>;
       clearStore: () => Promise<any>;
       exportWatchlistCsv: (watchlist: Watchlist, filename: string) => Promise<any>;
+      exportWatchlistJson: (watchlist: Watchlist, filename: string) => Promise<any>;
       selectFolder: () => Promise<string | undefined>;
       saveCredentials: (data: any) => Promise<any>;
       saveAccessToken: () => Promise<any>;

@@ -29,7 +29,7 @@ interface WatchlistContextType {
   exportWatchlist: () => void;
   refreshItems: (showToast?: boolean) => Promise<void>;
   availableItems: Omit<WatchlistItem, "id" | "dateAdded">[];
-  exportDefaultWatchlistCsv: () => void;
+  exportDefaultWatchlistJson: () => void;
 }
 
 const WatchlistContext = createContext<WatchlistContextType | null>(null);
@@ -268,7 +268,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     toast({ title: "Watchlist exported." });
   };
 
-  const exportDefaultWatchlistCsv = async () => {
+  const exportDefaultWatchlistJson = async () => {
     const defaultWatchlist = watchlists.find(wl => wl.isDefault);
     if (!defaultWatchlist) {
       toast({
@@ -279,9 +279,9 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const filename = `new_stocks.csv`;
+    const filename = `new_stocks.json`;
     try {
-      const result = await window.electron.exportWatchlistCsv(defaultWatchlist, filename);
+      const result = await window.electron.exportWatchlistJson(defaultWatchlist, filename);
       if (result.success) {
         toast({ title: `Watchlist "${defaultWatchlist.name}" exported.` });
       } else {
@@ -315,7 +315,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         exportWatchlist,
         refreshItems,
         availableItems,
-        exportDefaultWatchlistCsv,
+        exportDefaultWatchlistJson,
       }}
     >
       {children}
