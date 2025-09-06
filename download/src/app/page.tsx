@@ -49,7 +49,9 @@ function ClientPage() {
     };
 
     if (typeof window.electron !== 'undefined') {
-        autoLogin();
+        autoLogin().finally(() => {
+          window.electron.send('app-ready');
+        });
     }
   }, [searchParams, toast, refreshItems, openLoginDialog]);
 

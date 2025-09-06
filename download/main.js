@@ -11,10 +11,31 @@ const { convertToCSV } = require("./src/lib/csv-utils");
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
 
+let mainWindow;
+let loadingWindow;
+
+function createLoadingScreen() {
+  loadingWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    frame: false,
+    transparent: true,
+    webPreferences: {
+      nodeIntegration: true,
+    },
+  });
+  loadingWindow.loadFile(path.join(__dirname, 'loading.html'));
+  loadingWindow.on('closed', () => (loadingWindow = null));
+  loadingWindow.webContents.on('did-finish-load', () => {
+    loadingWindow.show();
+  });
+}
+
 function createWindow() {
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    show: false, // Do not show initially
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -24,12 +45,12 @@ function createWindow() {
 
   if (isDev) {
     // Load the URL of the running Next.js dev server
-    win.loadURL("http://localhost:9002");
+    mainWindow.loadURL("http://localhost:9002");
     // Open the DevTools.
-    win.webContents.openDevTools();
+    mainWindow.webContents.openDevTools();
   } else {
     // Load the Next.js build
-    win.loadURL(
+    mainWindow.loadURL(
       url.format({
         pathname: path.join(__dirname, "out", "index.html"),
         protocol: "file:",
@@ -57,6 +78,13 @@ async function mockExternalLogin(credentials) {
 }
 
 // IPC Handlers
+ipcMain.on('app-ready', () => {
+  if (loadingWindow) {
+    loadingWindow.close();
+  }
+  mainWindow.show();
+});
+
 ipcMain.handle("login", async (event, credentials) => {
   const result = await loginToUpstox(credentials);
   if (result.success) {

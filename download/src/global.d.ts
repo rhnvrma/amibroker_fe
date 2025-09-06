@@ -5,6 +5,7 @@ export {};
 declare global {
   interface Window {
     electron: {
+      send: (channel: string, data?: any) => void;
       login: (credentials: any) => Promise<any>;
       getCredentials: () => Promise<any>;
       refreshItems: () => Promise<any>;

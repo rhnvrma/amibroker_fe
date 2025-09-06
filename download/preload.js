@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electron", {
+  send: (channel, data) => ipcRenderer.send(channel, data),
   login: (credentials) => ipcRenderer.invoke("login", credentials),
   getCredentials: () => ipcRenderer.invoke("get-credentials"),
   refreshItems: () => ipcRenderer.invoke("refresh-items"),
