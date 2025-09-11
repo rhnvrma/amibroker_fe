@@ -8,6 +8,8 @@ const { fetchAndDecompressItems } = require("./src/lib/item-updater");
 const fs = require('fs');
 const { convertToCSV } = require("./src/lib/csv-utils");
 const {convertToJson}=require("./src/lib/json_utils");
+const winax = require('winax');
+const { getTradingSymbol } = require('./backend_utils/symbolhelper');
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -164,16 +166,68 @@ ipcMain.handle('save-credentials', async (event, credentials) => {
   }
 });
 ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
+  let ab;
   try {
+    // --- Part 1: Interact with the COM object using winax ---
+    console.log("Connecting to Broker.Application...");
+    // Use a try/catch specifically for the COM object in case it's not available
+    try {
+        ab = new winax.Object("Broker.Application");
+    } catch (comError) {
+        console.error("Failed to create COM object 'Broker.Application'. Is the software installed and running?", comError);
+        throw new Error("Could not connect to Broker.Application. Please ensure it is installed.");
+    }
+
+    console.log("Successfully connected. Processing watchlist...");
+
+    // Assuming 'watchlist' is an array of objects, e.g., [{ trading_symbol: 'RELIANCE' }, ...]
+    // If it's just an array of strings, use 'symbol' directly.
+    console.log(watchlist);
+    watchlist['items'].forEach(item => {
+
+      const symbol = getTradingSymbol(item);
+
+      if (symbol) {
+        console.log(`Adding symbol: ${symbol}`);
+        let stk = ab.Stocks.Add(symbol);
+        stk.FullName = item.trading_symbol.replace(/\s+/g,'');
+        item.trading_symbol=symbol;
+      }
+    });
+
+    console.log("Finished processing watchlist with COM object.");
+
+    // --- Part 2: Your existing logic to save the file ---
     const jsonData = convertToJson(watchlist);
     const credentials = store.get('credentials');
     const exportPath = credentials && credentials.rootFolder ? credentials.rootFolder : app.getPath('desktop');
     const filePath = path.join(exportPath, filename);
+  
     fs.writeFileSync(filePath, jsonData);
-    return { success: true, path: filePath };
+    console.log(`Watchlist successfully saved to ${filePath}`);
+
+    // --- Part 3: Return success ---
+    return { success: true, path: filePath, message: 'Watchlist processed and exported successfully.' };
+
   } catch (error) {
-    console.error("Failed to export watchlist to JSON", error);
+    console.error("An error occurred during watchlist processing:", error);
     return { success: false, error: error.message };
+  }
+  finally {
+    // --- Release COM object properly ---
+    if (ab) {
+      try {
+        // ab.Release(); 
+        ab = null;
+        if (global.gc) {
+          global.gc(); // only works if Node started with --expose-gc
+          console.log("Garbage collection triggered.");
+        }
+        console.log("Released COM object Broker.Application");
+      } catch (releaseErr) {
+        console.warn("Failed to release COM object cleanly:", releaseErr);
+      }
+    }
   }
 });
 app.whenReady().then(createWindow);

@@ -1,6 +1,65 @@
 const axios = require('axios');
 const { CookieJar } = require('tough-cookie');
 const otpauth = require('otpauth');
+const path = require('path');
+const fs = require("fs");
+
+const SERVICE_URL = 'https://service.upstox.com/';
+
+/**
+ * Checks if a valid, existing access token can be used.
+ * @param {string} rootFolder - The folder where the access_token.txt file is stored.
+ * @returns {Promise<object|null>} - A promise that resolves with the login result if the token is valid, otherwise null.
+ */
+async function checkExistingToken(rootFolder) {
+    console.log("Step 0: Checking for an existing token...");
+
+    if (!rootFolder || !fs.existsSync(rootFolder)) {
+        console.log("   -> Root folder not provided or does not exist. Skipping check.");
+        return null;
+    }
+
+    const tokenFilePath = path.join(rootFolder, "access_token.txt");
+
+    if (!fs.existsSync(tokenFilePath)) {
+        console.log("   -> Token file not found. Proceeding with full login.");
+        return null;
+    }
+
+    const content = fs.readFileSync(tokenFilePath, "utf-8").trim();
+
+    if (content.length === 0) {
+        console.log("   -> Token file is empty. Proceeding with full login.");
+        return null;
+    }
+
+    const lines = content.split(/\r?\n/);
+    const access_token = lines[0] || "";
+    const refresh_token = lines[1] || "";
+    const cookie = `access_token=${access_token};refresh_token=${refresh_token}`;
+
+    try {
+        const checkRes = await axios.get(`${SERVICE_URL}profile/v5/client-info`, {
+            headers: { Cookie: cookie },
+        });
+
+        if (checkRes.status === 200) {
+            console.log("✅ Token is valid, skipping login flow.");
+            return {
+                success: true,
+                token: content,
+                refreshedItems: [], // You could potentially send client-info back here
+            };
+        } else {
+            console.log("⚠️ Token check failed with status:", checkRes.status);
+            return null;
+        }
+    } catch (err) {
+        console.log("⚠️ Token is invalid, proceeding with full login flow...");
+        return null;
+    }
+}
+
 
 /**
  * Performs login to the Upstox API.
@@ -10,21 +69,19 @@ const otpauth = require('otpauth');
  * @param {string} credentials.mobileNumber
  * @param {string} credentials.pin
  * @param {string} credentials.toptSecret
+ * @param {string} credentials.rootFolder
  * @returns {Promise<object>} - A promise that resolves with the login result.
  */
 async function loginToUpstox(credentials) {
     console.log("Attempting to log in with credentials:", { ...credentials });
+    const { apiKey, apiSecret, mobileNumber, pin, toptSecret, rootFolder } = credentials;
 
+    // If no valid existing token, proceed with the full login flow
     const { wrapper } = await import('axios-cookiejar-support');
-
-    const { apiKey, apiSecret, mobileNumber, pin, toptSecret } = credentials;
-
     const BASE_URL = "https://api.upstox.com/v2";
-    const SERVICE_URL = 'https://service.upstox.com/';
     const REDIRECT_URL = "http://localhost";
 
     try {
-        // The jar will automatically store cookies from 'Set-Cookie' headers
         const jar = new CookieJar();
         const session = wrapper(axios.create({ jar, withCredentials: true }));
 
@@ -88,27 +145,23 @@ async function loginToUpstox(credentials) {
         });
         console.log("    -> Success! 2FA response received, cookies should be set.");
 
-        // --- MODIFICATION START ---
         // 5. Extract tokens by reading the cookies from the jar
         console.log("Step 5: Extracting tokens from cookie jar...");
         
-        const cookies = jar.getCookiesSync(SERVICE_URL); // Get all cookies for the domain
+        const cookies = jar.getCookiesSync(SERVICE_URL);
         
         const accessTokenCookie = cookies.find(cookie => cookie.key === 'access_token');
         const refreshTokenCookie = cookies.find(cookie => cookie.key === 'refresh_token');
 
         if (!accessTokenCookie) {
-            // For debugging if cookie names are different
             console.error("Failed to find 'access_token' cookie. All cookies found:", JSON.stringify(cookies, null, 2));
             throw new Error("Could not find access_token cookie in the jar.");
         }
 
         const accessToken = accessTokenCookie.value;
-        const refreshToken = refreshTokenCookie ? refreshTokenCookie.value : null; // Handle if refresh token isn't set
+        const refreshToken = refreshTokenCookie ? refreshTokenCookie.value : null;
         
         console.log("\n✅ Successfully obtained Access Token!");
-        // --- MODIFICATION END ---
-
 
         return {
             success: true,
@@ -131,4 +184,4 @@ async function loginToUpstox(credentials) {
     }
 }
 
-module.exports = { loginToUpstox };
+module.exports = { loginToUpstox, checkExistingToken };

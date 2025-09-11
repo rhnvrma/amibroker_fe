@@ -27,6 +27,7 @@ function ClientPage() {
       const savedCredentials = await window.electron.getCredentials();
       if (savedCredentials) {
         try {
+          
           const response = await window.electron.login(savedCredentials);
           if (response.success) {
             updateAvailableItems(response.refreshedItems);
