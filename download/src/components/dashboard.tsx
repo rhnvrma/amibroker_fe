@@ -33,7 +33,7 @@ export function Dashboard() {
         <SidebarHeader>
           <div className="flex items-center gap-2 p-2">
             <WatchtowerLogo className="w-7 h-7 text-primary" />
-            <span className="text-lg font-semibold">Watchtower</span>
+            <span className="text-lg font-semibold">Arkalogi</span>
           </div>
         </SidebarHeader>
         <SidebarContent className="flex flex-col">

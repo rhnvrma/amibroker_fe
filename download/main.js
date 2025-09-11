@@ -10,6 +10,7 @@ const { convertToCSV } = require("./src/lib/csv-utils");
 const {convertToJson}=require("./src/lib/json_utils");
 const winax = require('winax');
 const { getTradingSymbol } = require('./backend_utils/symbolhelper');
+const { sendToPipe } = require("./backend_utils/pipe_send");
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -42,6 +43,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      
       preload: path.join(__dirname, "preload.js"),
     },
   });
@@ -60,6 +62,7 @@ function createWindow() {
         slashes: true,
       })
     );
+    // mainWindow.setMenu(null);
   }
 }
 
@@ -182,7 +185,7 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
 
     // Assuming 'watchlist' is an array of objects, e.g., [{ trading_symbol: 'RELIANCE' }, ...]
     // If it's just an array of strings, use 'symbol' directly.
-    console.log(watchlist);
+    // console.log(watchlist);
     watchlist['items'].forEach(item => {
 
       const symbol = getTradingSymbol(item);
@@ -204,8 +207,8 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
     const filePath = path.join(exportPath, filename);
   
     fs.writeFileSync(filePath, jsonData);
+    sendToPipe("MyTestPipe", "Final");
     console.log(`Watchlist successfully saved to ${filePath}`);
-
     // --- Part 3: Return success ---
     return { success: true, path: filePath, message: 'Watchlist processed and exported successfully.' };
 

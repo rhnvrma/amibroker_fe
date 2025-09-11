@@ -24,11 +24,28 @@
     "files": [
       "out/**/*",
       "main.js",
-      "package.json"
+      "package.json",
+      "preload.js",
+      "loading.html",
+      "src/lib/**/*",
+      "backend_utils/**/*"
     ],
-    "win": {
-      "target": "nsis"
+    "extraFiles": [
+    {
+      "from": "extra_resources",
+      "to": ".",
+      "filter": [
+        "**/*"
+      ]
     }
+  ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+    "allowToChangeInstallationDirectory": true
+  }
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.1",

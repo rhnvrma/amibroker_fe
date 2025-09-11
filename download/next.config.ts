@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   assetPrefix: isElectron ? '.' : undefined,
   basePath: isElectron ? '' : undefined,
+  // assetPrefix: isElectron ? './' : undefined,
 };
 
 export default nextConfig;
