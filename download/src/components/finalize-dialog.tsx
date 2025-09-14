@@ -9,7 +9,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CheckCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CheckCircle, TriangleAlert } from "lucide-react";
 import { useWatchlist } from "@/contexts/watchlist-context";
 
 interface FinalizeDialogProps {
@@ -21,13 +22,16 @@ export function FinalizeDialog({
   isOpen,
   setIsOpen,
 }: FinalizeDialogProps) {
-  const { exportDefaultWatchlistJson } = useWatchlist();
+  const { exportDefaultWatchlistJson, activeWatchlist } = useWatchlist();
 
   const handleFinalize = async () => {
     exportDefaultWatchlistJson();
     await window.electron.saveAccessToken();
     setIsOpen(false);
   }
+
+  const symbolCount = activeWatchlist?.items.length || 0;
+  const showWarning = symbolCount > 250;
 
   return (
     <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
@@ -41,6 +45,17 @@ export function FinalizeDialog({
             All your changes have been saved. Please restart Amibroker for them to take full effect.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        
+        {showWarning && (
+            <Alert variant="destructive">
+                <TriangleAlert className="h-4 w-4" />
+                <AlertTitle>Caution</AlertTitle>
+                <AlertDescription>
+                    You've slected too many symbols, System has not gone under stress testing, please proceed with caution.
+                </AlertDescription>
+            </Alert>
+        )}
+
         <AlertDialogFooter>
           <AlertDialogAction
             onClick={handleFinalize}
