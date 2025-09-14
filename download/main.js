@@ -244,15 +244,6 @@ app.on("before-quit", async (event) => {
   // Prevent the app from quitting immediately
   event.preventDefault(); 
 
-  // Example async cleanup function
-  const cleanup = () => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        console.log("Async cleanup finished.");
-        resolve();
-      }, 1000); // Simulate a 1-second task
-    });
-  };
 
   await cleanup();
 
