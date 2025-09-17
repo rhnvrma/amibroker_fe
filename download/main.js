@@ -17,6 +17,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 let mainWindow;
 let loadingWindow;
+let isQuitting = false; // Add this flag
 
 function createLoadingScreen() {
   loadingWindow = new BrowserWindow({
@@ -234,19 +235,48 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
   }
 });
 app.whenReady().then(() => {
-  createLoadingScreen(); // Call the loading screen first
+  createLoadingScreen(); // Call the acreen first
   createWindow();
 });
 
-app.on("before-quit", async (event) => {
-  console.log("Running cleanup before quit...");
+// MODIFIED 'before-quit' event handler
+app.on("before-quit", (event) => {
+  if (isQuitting) {
+    return;
+  }
+  event.preventDefault();
+  isQuitting = true;
+  
+  console.log("Closing all windows...");
+  BrowserWindow.getAllWindows().forEach(window => window.destroy());
 
-  // Prevent the app from quitting immediately
-  event.preventDefault(); 
+  // Use setTimeout to allow window 'destroy' events to process before starting the task
+  setTimeout(() => {
+    console.log("Starting background cleanup task...");
+    
+    const itemsToProcess = Array.from({ length: 10000 }, (_, i) => i + 1);
+    const totalItems = itemsToProcess.length;
+    let processedCount = 0;
 
+    function processBatchInBackground() {
+      const batchSize = 10;
+      let itemsInBatch = 0;
+      while (processedCount < totalItems && itemsInBatch < batchSize) {
+        // Your actual processing logic for an item goes here
+        console.log(`Processing item ${processedCount + 1} in the background...`);
+        processedCount++;
+        itemsInBatch++;
+      }
 
-  await cleanup();
-
-  // Now, quit the app for real
-  app.exit(); 
-}); 
+      if (processedCount < totalItems) {
+        process.nextTick(processBatchInBackground);
+      } else {
+        console.log("Background cleanup finished. Quitting app.");
+        app.exit();
+      }
+    }
+    
+    // Start the first batch
+    processBatchInBackground();
+  }, 100); // A 100ms delay should be sufficient
+});
