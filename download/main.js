@@ -196,7 +196,7 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
         let stk = ab.Stocks.Add(symbol);
         stk.FullName = item.trading_symbol.replace(/\s+/g,'');
         item.trading_symbol=symbol;
-      }
+      } 
     });
 
     console.log("Finished processing watchlist with COM object.");

@@ -1,10 +1,36 @@
-const axios = require('axios');
 const { CookieJar } = require('tough-cookie');
 const otpauth = require('otpauth');
 const path = require('path');
 const fs = require("fs");
 
 const SERVICE_URL = 'https://service.upstox.com/';
+
+/**
+ * A helper function to manage fetch requests and cookie handling.
+ * This version correctly handles multiple 'set-cookie' headers.
+ * @param {string} url - The URL to fetch.
+ * @param {object} options - The options for the fetch request.
+ * @param {CookieJar} jar - The cookie jar instance.
+ * @returns {Promise<Response>} - A promise that resolves with the fetch response.
+ */
+async function fetchWithCookies(url, options, jar) {
+    const cookieString = await jar.getCookieString(url);
+    if (cookieString) {
+        options.headers = { ...options.headers, 'Cookie': cookieString };
+    }
+
+    const response = await fetch(url, options);
+
+    // This is the corrected part. The 'Headers' object is iterable.
+    // We check for the 'set-cookie' header specifically.
+    const setCookieHeader = response.headers.get('set-cookie');
+    if (setCookieHeader) {
+         // tough-cookie can handle the combined header string
+        await jar.setCookie(setCookieHeader, response.url);
+    }
+    
+    return response;
+}
 
 /**
  * Checks if a valid, existing access token can be used.
@@ -35,23 +61,22 @@ async function checkExistingToken(rootFolder) {
 
     const lines = content.split(/\r?\n/);
     const access_token = lines[0] || "";
-    const refresh_token = lines[1] || "";
-    const cookie = `access_token=${access_token};refresh_token=${refresh_token}`;
+    const cookie = `access_token=${access_token}`;
 
     try {
-        const checkRes = await axios.get(`${SERVICE_URL}profile/v5/client-info`, {
-            headers: { Cookie: cookie },
+        const response = await fetch(`${SERVICE_URL}profile/v5/client-info`, {
+            headers: { 'Cookie': cookie },
         });
 
-        if (checkRes.status === 200) {
+        if (response.ok) {
             console.log("✅ Token is valid, skipping login flow.");
             return {
                 success: true,
                 token: content,
-                refreshedItems: [], // You could potentially send client-info back here
+                refreshedItems: [],
             };
         } else {
-            console.log("⚠️ Token check failed with status:", checkRes.status);
+            console.log("⚠️ Token check failed with status:", response.status);
             return null;
         }
     } catch (err) {
@@ -64,27 +89,17 @@ async function checkExistingToken(rootFolder) {
 /**
  * Performs login to the Upstox API.
  * @param {object} credentials - The user's API credentials.
- * @param {string} credentials.apiKey
- * @param {string} credentials.apiSecret
- * @param {string} credentials.mobileNumber
- * @param {string} credentials.pin
- * @param {string} credentials.toptSecret
- * @param {string} credentials.rootFolder
  * @returns {Promise<object>} - A promise that resolves with the login result.
  */
 async function loginToUpstox(credentials) {
     console.log("Attempting to log in with credentials:", { ...credentials });
-    const { apiKey, apiSecret, mobileNumber, pin, toptSecret, rootFolder } = credentials;
-
-    // If no valid existing token, proceed with the full login flow
-    const { wrapper } = await import('axios-cookiejar-support');
+    const { apiKey, mobileNumber, pin, toptSecret } = credentials;
+    
     const BASE_URL = "https://api.upstox.com/v2";
     const REDIRECT_URL = "http://localhost";
+    const jar = new CookieJar();
 
     try {
-        const jar = new CookieJar();
-        const session = wrapper(axios.create({ jar, withCredentials: true }));
-
         // 1. Get Authorization Dialog
         const authDialogUrl = new URL(`${BASE_URL}/login/authorization/dialog`);
         authDialogUrl.search = new URLSearchParams({
@@ -97,41 +112,48 @@ async function loginToUpstox(credentials) {
 
         console.log("Step 1: Requesting authorization dialog...");
         let userId, clientIdFromRedirect;
-        try {
-            await session.get(authDialogUrl.toString(), { maxRedirects: 0 });
-        } catch (error) {
-            if (error.response && error.response.status === 302) {
-                const location = error.response.headers.location;
-                const redirectUrlParams = new URL(location).searchParams;
-                userId = redirectUrlParams.get('user_id');
-                clientIdFromRedirect = redirectUrlParams.get('client_id');
-                console.log(`    -> Success! Extracted userId: ${userId}`);
-            } else {
-                throw new Error("Failed to get initial redirect for user_id.", { cause: error });
-            }
+        
+        const initialAuthResponse = await fetchWithCookies(authDialogUrl.toString(), { redirect: 'manual' }, jar);
+        
+        const location = initialAuthResponse.headers.get('location');
+        if (location) {
+            const redirectUrlParams = new URL(location).searchParams;
+            userId = redirectUrlParams.get('user_id');
+            clientIdFromRedirect = redirectUrlParams.get('client_id');
+            console.log(`    -> Success! Extracted userId: ${userId}`);
+        } else {
+             throw new Error("Failed to get initial redirect for user_id.");
         }
+
         if (!userId) throw new Error("Could not extract user_id.");
 
-        session.defaults.headers.common['x-device-details'] = 'platform=WEB|osName=Windows/10|osVersion=Chrome/131.0.0.0|appVersion=4.0.0|modelName=Chrome|manufacturer=unknown|uuid=YSBB6dKYEDtLd0gKuQhe|userAgent=Upstox 3.0 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-        session.defaults.headers.post['Content-Type'] = 'application/json';
+        const commonHeaders = {
+            'x-device-details': 'platform=WEB|osName=Windows/10|osVersion=Chrome/131.0.0.0|appVersion=4.0.0|modelName=Chrome|manufacturer=unknown|uuid=YSBB6dKYEDtLd0gKuQhe|userAgent=Upstox 3.0 Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Content-Type': 'application/json'
+        };
 
         // 2. Generate 1FA OTP validation token
         console.log("Step 2: Generating 1FA OTP token...");
-        const otpGenerateResponse = await session.post(`${SERVICE_URL}login/open/v6/auth/1fa/otp/generate`, {
-            data: { mobileNumber: mobileNumber, userId: userId }
-        });
-        const validateOTPToken = otpGenerateResponse.data.data.validateOTPToken;
+        const otpGenerateResponse = await fetchWithCookies(`${SERVICE_URL}login/open/v6/auth/1fa/otp/generate`, {
+            method: 'POST',
+            headers: commonHeaders,
+            body: JSON.stringify({ data: { mobileNumber: mobileNumber, userId: userId } })
+        }, jar);
+        const otpGenerateData = await otpGenerateResponse.json();
+        const validateOTPToken = otpGenerateData.data.validateOTPToken;
         console.log("    -> Success! Received OTP validation token.");
 
         // 3. Verify TOTP
         const totp = new otpauth.TOTP({ secret: otpauth.Secret.fromBase32(toptSecret) });
         console.log("Step 3: Verifying TOTP...");
-        await session.post(`${SERVICE_URL}login/open/v4/auth/1fa/otp-totp/verify`, {
-            data: { otp: totp.generate(), validateOtpToken: validateOTPToken }
-        });
+        await fetchWithCookies(`${SERVICE_URL}login/open/v4/auth/1fa/otp-totp/verify`, {
+            method: 'POST',
+            headers: commonHeaders,
+            body: JSON.stringify({ data: { otp: totp.generate(), validateOtpToken: validateOTPToken } })
+        }, jar);
         console.log("    -> Success! TOTP verified.");
 
-        // 4. Perform 2FA with PIN. This request's response will set the auth cookies.
+        // 4. Perform 2FA with PIN
         const encodedPin = Buffer.from(pin).toString('base64');
         const twoFaUrl = new URL(`${SERVICE_URL}login/open/v3/auth/2fa`);
         twoFaUrl.search = new URLSearchParams({
@@ -140,16 +162,17 @@ async function loginToUpstox(credentials) {
         }).toString();
         
         console.log("Step 4: Performing 2FA with PIN...");
-        await session.post(twoFaUrl.toString(), {
-            data: { twoFAMethod: "SECRET_PIN", inputText: encodedPin }
-        });
+        await fetchWithCookies(twoFaUrl.toString(), {
+            method: 'POST',
+            headers: commonHeaders,
+            body: JSON.stringify({ data: { twoFAMethod: "SECRET_PIN", inputText: encodedPin } })
+        }, jar);
         console.log("    -> Success! 2FA response received, cookies should be set.");
 
-        // 5. Extract tokens by reading the cookies from the jar
+        // 5. Extract tokens from cookie jar
         console.log("Step 5: Extracting tokens from cookie jar...");
         
-        const cookies = jar.getCookiesSync(SERVICE_URL);
-        
+        const cookies = await jar.getCookies(SERVICE_URL);
         const accessTokenCookie = cookies.find(cookie => cookie.key === 'access_token');
         const refreshTokenCookie = cookies.find(cookie => cookie.key === 'refresh_token');
 
@@ -171,15 +194,12 @@ async function loginToUpstox(credentials) {
 
     } catch (error) {
         console.error("Upstox login error:", error.message);
-        if (error.response) {
-            console.error("    - Status:", error.response.status);
-            console.error("    - Data:", JSON.stringify(error.response.data, null, 2));
-        } else if (error.cause) {
+        if (error.cause) {
             console.error("    - Caused by:", error.cause);
         }
         return {
             success: false,
-            error: error.response?.data?.errors?.[0]?.message || error.message || "An unknown error occurred during login.",
+            error: error.message || "An unknown error occurred during login.",
         };
     }
 }
