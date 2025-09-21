@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "A modern Watchlist Manager",
-  "author": "Your Name",
+  "author": "Rohan Verma",
   "main": "main.js",
   "scripts": {
     "dev": "next dev --turbopack -p 9002",
@@ -33,12 +33,13 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico",
+      "icon": "build/icon2.ico",
       "requestedExecutionLevel": "requireAdministrator"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "defaultDirName": "{programFiles32}\\AmiBroker"
     }
   },
   "dependencies": {

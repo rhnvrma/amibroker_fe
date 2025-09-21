@@ -42,6 +42,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     show: false, // Do not show initially
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -64,7 +65,7 @@ function createWindow() {
         slashes: true,
       })
     );
-    // mainWindow.setMenu(null);
+    mainWindow.setMenu(null);
   }
 }
 
@@ -244,6 +245,28 @@ ipcMain.handle("export-watchlist-json",async  (event, { watchlist, filename }) =
     }
   }
 });
+// Window Controls
+ipcMain.on('minimize-window', () => {
+  if (mainWindow) {
+    mainWindow.minimize();
+  }
+});
+
+ipcMain.on('maximize-window', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.on('close-window', () => {
+  if (mainWindow) {
+    mainWindow.close();
+  }
+});
 app.whenReady().then(() => {
   createLoadingScreen(); // Call the acreen first
   createWindow();
@@ -264,7 +287,7 @@ app.on("before-quit", (event) => {
   setTimeout(() => {
     console.log("Starting background cleanup task...");
     
-    const itemsToProcess = Array.from({ length: 10000 }, (_, i) => i + 1);
+    const itemsToProcess = Array.from({ length: 1 }, (_, i) => i + 1);
     const totalItems = itemsToProcess.length;
     let processedCount = 0;
 

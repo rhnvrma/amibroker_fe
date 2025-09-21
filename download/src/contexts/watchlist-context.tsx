@@ -106,18 +106,35 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
       const data = getInitialState();
       setWatchlists(data);
       const defaultWatchlist = data.find((wl: Watchlist) => wl.isDefault);
+      if (defaultWatchlist) {
+        try {
+          const filename = `new_stocks.json`;
+          const result = await window.electron.exportWatchlistJson(defaultWatchlist, filename);
+          if (result.success) {
+            toast({ title: `Default watchlist "${defaultWatchlist.name}" processed.` });
+          } else {
+            throw new Error(result.error);
+          }
+        } catch (error) {
+          toast({
+            variant: "destructive",
+            title: "Processing failed",
+            description: (error as Error).message,
+          });
+        }
+      }
       setActiveWatchlistId(defaultWatchlist ? defaultWatchlist.id : data[0]?.id || null);
-      
+
       // Trigger the initial processing
       setRefreshed(r => !r);
     };
 
     initializeData();
-  }, []);
+  }, [toast]);
 
   // Preprocess the instrument data whenever `availableItems` is updated
   const instrumentData = useMemo(() => {
-    return preprocessInstruments(availableItems);
+    return preprocessInstruments(availableItems as WatchlistItem[]);
   }, [refreshed]); // This now re-runs whenever items are refreshed
 
   useEffect(() => {
