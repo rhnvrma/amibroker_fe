@@ -171,7 +171,7 @@ ipcMain.handle('save-credentials', async (event, credentials) => {
     return { success: false, error: error.message };
   }
 });
-ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
+ipcMain.handle("export-watchlist-json",async  (event, { watchlist, filename }) => {
   let ab;
   try {
     // --- Part 1: Interact with the COM object using winax ---
@@ -209,13 +209,14 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
     const credentials = store.get('credentials');
     const exportPath = credentials && credentials.rootFolder ? credentials.rootFolder : app.getPath('desktop');
     const filePath = path.join(exportPath, filename);
+    const backfillPath = path.join(exportPath, "data_backfill");
     try {
         // Ensure the root data directory exists before starting
-        fs.mkdir(filePath, { recursive: true });
-        console.log('info', `Data will be saved in '${filePath}' directory.`);
+        fs.mkdirSync(backfillPath, { recursive: true });
+        console.log('info', `Data will be saved in '${backfillPath}' directory.`);
         
         // Call the main function with the list of items and the root path.
-        fetchAndStoreData(item, filePath);
+        await fetchAndStoreData(watchlist['items'], backfillPath);
     } catch (error) {
         console.log('error', `An unexpected top-level error occurred: ${error.stack}`);
     }

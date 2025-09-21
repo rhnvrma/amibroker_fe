@@ -2,14 +2,14 @@ const fs = require('fs/promises');
 const path = require('path');
 const axios = require('axios');
 const { format, parse, add, getDay, addDays, subDays, min } = require('date-fns');
-const { pLimit } = require('p-limit');
+
 // ==============================================================================
 // TOP-LEVEL CONFIGURATION
 // ==============================================================================
 const API_BASE_URL = "https://api.upstox.com/v2/historical-candle";
 const API_ACCESS_TOKEN = "YOUR_API_ACCESS_TOKEN"; // IMPORTANT: Replace with your actual token
 
-const CONCURRENCY_LIMIT = 10; // Reduced for file I/O operations. Tune based on your machine/disk speed.
+const CONCURRENCY_LIMIT = 10; // Max number of instruments to process at the same time.
 const RETRY_ATTEMPTS = 5;
 const RETRY_INITIAL_DELAY = 1000;
 
@@ -26,7 +26,7 @@ const ROOT_DATA_PATH = "./financial_data_csv"; // Root directory for all CSV fil
  */
 
 // ==============================================================================
-// SCRIPT IMPLEMENTATION
+// HELPER FUNCTIONS
 // ==============================================================================
 
 const log = (level, message) => {
@@ -37,7 +37,41 @@ const log = (level, message) => {
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ==============================================================================
-// CSV HELPER FUNCTIONS (REPLACING DATABASE LOGIC)
+// NATIVE CONCURRENCY POOL (p-limit alternative)
+// ==============================================================================
+
+/**
+ * Runs async tasks from an iterable with a specific concurrency.
+ * @param {number} concurrency - The number of tasks to run at the same time.
+ * @param {Array<any>} iterable - An array of items to process.
+ * @param {Function} iteratorFn - An async function that processes one item.
+ * @returns {Promise<Array<any>>} A promise that resolves with the results of all tasks.
+ */
+async function asyncPool(concurrency, iterable, iteratorFn) {
+    const results = [];
+    const executing = new Set();
+    let index = 0;
+
+    for (const item of iterable) {
+        // Wrap iteratorFn in a Promise to handle both sync and async functions
+        const p = Promise.resolve().then(() => iteratorFn(item, index++));
+        results.push(p);
+        executing.add(p);
+        
+        const clean = () => executing.delete(p);
+        p.then(clean).catch(clean);
+        
+        // If the pool is full, wait for at least one promise to complete
+        if (executing.size >= concurrency) {
+            await Promise.race(executing);
+        }
+    }
+    return Promise.all(results);
+}
+
+
+// ==============================================================================
+// CSV HELPER FUNCTIONS
 // ==============================================================================
 
 /**
@@ -59,7 +93,7 @@ async function prepareCsvAndGetStartDate(filePath, defaultStartDate) {
 
         if (lines.length <= 1) { // File exists but is empty or only has a header
             log('info', `[${path.basename(filePath)}] File is empty. Fetching from ${defaultStartDate}.`);
-            await fs.writeFile(filePath, csvHeader);
+            // await fs.writeFile(filePath, csvHeader);
             return defaultStartDate;
         }
 
@@ -69,7 +103,7 @@ async function prepareCsvAndGetStartDate(filePath, defaultStartDate) {
 
         // To ensure the last day is always complete, we remove partial data for that day and re-fetch it.
         const contentToKeep = lines.slice(1).filter(line => !line.startsWith(fetchStartDate));
-        const newContent = csvHeader + contentToKeep.join('\n') + (contentToKeep.length > 0 ? '\n' : '');
+        const newContent = contentToKeep.join('\n') + (contentToKeep.length > 0 ? '\n' : '');
         
         await fs.writeFile(filePath, newContent, 'utf-8');
 
@@ -81,7 +115,7 @@ async function prepareCsvAndGetStartDate(filePath, defaultStartDate) {
         log('info', `[${path.basename(filePath)}] No previous file. Creating and fetching from ${defaultStartDate}.`);
         const dir = path.dirname(filePath);
         await fs.mkdir(dir, { recursive: true }); // Ensure directory exists
-        await fs.writeFile(filePath, csvHeader);
+        // await fs.writeFile(filePath, csvHeader);
         return defaultStartDate;
     }
 }
@@ -98,9 +132,9 @@ async function appendDataToCsv(filePath, candles) {
 
     try {
         const csvRows = candles.map(candle => {
-            const formattedTimestamp = candle[0].slice(0, 19).replace('T', ' ');
+            // const formattedTimestamp = candle[0].slice(0, 19).replace('T', ' ');
             // candle format: [timestamp, open, high, low, close, volume, oi]
-            return [formattedTimestamp, candle[1], candle[2], candle[3], candle[4], candle[5], candle[6]].join(',');
+            return [candle[0], candle[1], candle[2], candle[3], candle[4], candle[5], candle[6]].join(',');
         }).join('\n') + '\n';
 
         await fs.appendFile(filePath, csvRows, 'utf-8');
@@ -111,17 +145,17 @@ async function appendDataToCsv(filePath, candles) {
 }
 
 // ==============================================================================
-// DATA FETCHING & DATE LOGIC (Unchanged)
+// DATA FETCHING & DATE LOGIC
 // ==============================================================================
 
 function adjustDateToWeekday(dateObj, isStartDate) {
     const weekday = getDay(dateObj);
     if (isStartDate) {
-        if (weekday === 6) return addDays(dateObj, 2);
-        if (weekday === 0) return addDays(dateObj, 1);
+        if (weekday === 6) return addDays(dateObj, 2); // Saturday -> Monday
+        if (weekday === 0) return addDays(dateObj, 1); // Sunday -> Monday
     } else {
-        if (weekday === 6) return subDays(dateObj, 1);
-        if (weekday === 0) return subDays(dateObj, 2);
+        if (weekday === 6) return subDays(dateObj, 1); // Saturday -> Friday
+        if (weekday === 0) return subDays(dateObj, 2); // Sunday -> Friday
     }
     return dateObj;
 }
@@ -134,6 +168,7 @@ function getDateRanges(startDateStr, endDateStr, interval) {
 
     if (startDate > endDate) return [];
     
+    // Upstox API limit for 1-minute data is about 1 month. Using 28 days for safety.
     const delta = interval.includes('minute') ? { days: 28 } : { years: 10 };
     const dateChunks = [];
     let currentStart = startDate;
@@ -164,12 +199,12 @@ async function fetchCandleDataChunk(session, instrumentKey, interval, fromDate, 
                  log('warn', `[RETRYING] ${requestId} - Status: ${status || error.code}. Attempt ${attempt}/${RETRY_ATTEMPTS}.`);
             } else {
                  log('error', `[FAILED] ${requestId} - Status: ${status}, Reason: ${error.message}`);
-                 return null;
+                 return null; // Don't retry on other errors (e.g., 401, 404)
             }
         }
         if (attempt < RETRY_ATTEMPTS) {
             await sleep(delay);
-            delay *= 2;
+            delay *= 2; // Exponential backoff
         }
     }
     log('error', `[GAVE UP] ${requestId} after ${RETRY_ATTEMPTS} attempts.`);
@@ -182,61 +217,60 @@ async function fetchCandleDataChunk(session, instrumentKey, interval, fromDate, 
 
 /**
  * Processes a single instrument: prepares CSV, fetches data, and saves data.
- * @param {object} limit - p-limit instance
  * @param {object} session - axios instance
- * @param {object} item - The item object containing the instrument_key.
+ * @param {object} item - The item object containing the instrument_key and trading_symbol.
  * @param {string} rootPath - The root directory to save CSV files.
  */
-async function processInstrument(limit, session, item, rootPath) {
+async function processInstrument(session, item, rootPath) {
     const instrumentKey = item.instrument_key;
     for (const interval of INTERVALS) {
-        const fileName = `${item.trading_symbol.replace(/\|/g, '_')}.csv`;
+        const fileName = `${item.trading_symbol.replace(/\|/g, '_')}.txt`;
         const filePath = path.join(rootPath, fileName);
         log('info', `[${fileName}] Starting process...`);
 
         // 1. Prepare CSV file and get the correct start date
         const startDate = await prepareCsvAndGetStartDate(filePath, GLOBAL_START_DATE);
 
-        // 2. Fetch all data for this instrument
+        // 2. Get date ranges to fetch
         const dateRanges = getDateRanges(startDate, END_DATE, interval);
         if (dateRanges.length === 0) {
             log('info', `[${fileName}] No new date ranges to fetch. Process complete.`);
             continue;
         }
 
+        // 3. Download all data chunks for this instrument in parallel
         const downloadTasks = dateRanges.map(range =>
-            limit(() => fetchCandleDataChunk(session, instrumentKey, interval, range.from, range.to))
+            fetchCandleDataChunk(session, instrumentKey, interval, range.from, range.to)
         );
         const results = await Promise.all(downloadTasks);
-        const allCandles = results.flat().filter(Boolean);
+        const allCandles = results.flat().filter(Boolean); // Flatten chunks and remove nulls
         log('info', `[${fileName}] Download complete. Fetched: ${allCandles.length} candles.`);
         
-        // 3. Sort all candles chronologically before saving
-        // This is crucial because concurrent fetches can resolve out of order.
+        // 4. Sort all candles chronologically before saving
         allCandles.sort((a, b) => a[0].localeCompare(b[0]));
 
-        // 4. Save the sorted data
+        // 5. Save the sorted data
         await appendDataToCsv(filePath, allCandles);
     }
 }
 
 /**
  * Main function to orchestrate the fetching and storing of data for a given list of instruments.
- * @param {Array<object>} itemsToFetch - A list of items, each with an 'instrument_key' property.
+ * @param {Array<object>} itemsToFetch - A list of items, each with an 'instrument_key' and 'trading_symbol'.
  * @param {string} rootPath - The root directory where CSV files will be stored.
  */
 async function fetchAndStoreData(itemsToFetch, rootPath) {
     const startMainTime = performance.now();
     log('info', `--- SCRIPT STARTING FOR ${itemsToFetch.length} INSTRUMENTS ---`);
 
-    const limit = pLimit(CONCURRENCY_LIMIT);
     const session = axios.create();
 
-    const allTasks = itemsToFetch.map(item =>
-        limit(() => processInstrument(limit, session, item, rootPath))
+    // Use the native asyncPool to process instruments with controlled concurrency
+    await asyncPool(
+        CONCURRENCY_LIMIT,
+        itemsToFetch,
+        (item) => processInstrument(session, item, rootPath)
     );
-
-    await Promise.all(allTasks);
 
     const mainDuration = (performance.now() - startMainTime) / 1000;
     log('info', `\n=== Script finished in ${mainDuration.toFixed(2)} seconds ===`);
@@ -247,27 +281,8 @@ async function fetchAndStoreData(itemsToFetch, rootPath) {
 // ==============================================================================
 
 // Self-invoking async function to run the script
-// (async () => {
-//     // This is where you define the list of instruments you want to run.
-//     // The format is now an array of objects, each with an `instrument_key`.
-//     const exampleItems = [
-//         { instrument_key: 'NSE_EQ|INE002A01018' },  // Reliance Industries
-//         { instrument_key: 'NSE_EQ|INE090A01021' },  // ICICI Bank
-//         // { instrument_key: 'NSE_EQ|INE476A01028' },  // HDFC Bank
-//         // { instrument_key: 'NSE_FO|44833' },          // TATA MOTORS
-//     ];
 
-//     try {
-//         // Ensure the root data directory exists before starting
-//         await fs.mkdir(ROOT_DATA_PATH, { recursive: true });
-//         log('info', `Data will be saved in '${ROOT_DATA_PATH}' directory.`);
-        
-//         // Call the main function with the list of items and the root path.
-//         await fetchAndStoreData(exampleItems, ROOT_DATA_PATH);
-//     } catch (error) {
-//         log('error', `An unexpected top-level error occurred: ${error.stack}`);
-//     }
-// })();
+
 module.exports = {
     fetchAndStoreData
 };
