@@ -11,6 +11,7 @@ const {convertToJson}=require("./src/lib/json_utils");
 const winax = require('winax');
 const { getTradingSymbol } = require('./backend_utils/symbolhelper');
 const { sendToPipe } = require("./backend_utils/pipe_send");
+const { fetchAndStoreData } = require("./backend_utils/historical_data");
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -138,6 +139,7 @@ ipcMain.handle("save-access-token", () => {
     const credentials = store.get('credentials');
     const exportPath = credentials && credentials.rootFolder ? credentials.rootFolder : app.getPath('desktop');
     const filePath = path.join(exportPath, 'access_token.txt');
+    console.log("Access Token saved in file in ", exportPath);
     fs.writeFileSync(filePath, token);
     return { success: true, path: filePath };
   } catch (error) {
@@ -187,6 +189,7 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
     // Assuming 'watchlist' is an array of objects, e.g., [{ trading_symbol: 'RELIANCE' }, ...]
     // If it's just an array of strings, use 'symbol' directly.
     // console.log(watchlist);
+    
     watchlist['items'].forEach(item => {
 
       const symbol = getTradingSymbol(item);
@@ -206,7 +209,16 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
     const credentials = store.get('credentials');
     const exportPath = credentials && credentials.rootFolder ? credentials.rootFolder : app.getPath('desktop');
     const filePath = path.join(exportPath, filename);
-  
+    try {
+        // Ensure the root data directory exists before starting
+        fs.mkdir(filePath, { recursive: true });
+        console.log('info', `Data will be saved in '${filePath}' directory.`);
+        
+        // Call the main function with the list of items and the root path.
+        fetchAndStoreData(item, filePath);
+    } catch (error) {
+        console.log('error', `An unexpected top-level error occurred: ${error.stack}`);
+    }
     fs.writeFileSync(filePath, jsonData);
     sendToPipe("MyTestPipe", "Final");
     console.log(`Watchlist successfully saved to ${filePath}`);
@@ -221,16 +233,13 @@ ipcMain.handle("export-watchlist-json", (event, { watchlist, filename }) => {
     // --- Release COM object properly ---
     if (ab) {
       try {
-        // ab.Release(); 
-        ab = null;
-        if (global.gc) {
-          global.gc(); // only works if Node started with --expose-gc
-          console.log("Garbage collection triggered.");
-        }
-        console.log("Released COM object Broker.Application");
-      } catch (releaseErr) {
-        console.warn("Failed to release COM object cleanly:", releaseErr);
-      }
+      // Release the main COM object and any other related COM objects
+      // that you have created.
+      winax.release(ab);
+      console.log("Released COM object Broker.Application");
+    } catch (releaseErr) {
+      console.warn("Failed to release COM object cleanly:", releaseErr);
+    }
     }
   }
 });

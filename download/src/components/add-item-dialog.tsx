@@ -9,11 +9,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useWatchlist } from "@/contexts/watchlist-context";
 import type { WatchlistItem } from "@/lib/types";
-import { useState, useMemo, type ReactNode, useRef } from "react";
+import { useState, useMemo, type ReactNode, useRef, useEffect } from "react";
 import { Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "./ui/scroll-area";
@@ -25,39 +32,101 @@ interface AddItemDialogProps {
 }
 
 export function AddItemDialog({ children }: AddItemDialogProps) {
-  const { addItems, activeWatchlist, availableItems } = useWatchlist();
+  const { addItems, activeWatchlist, availableItems, instrumentData } = useWatchlist();
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItems, setSelectedItems] = useState<Omit<WatchlistItem, 'id' | 'dateAdded'>[]>([]);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
+  const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
+  const [selectedUnderlying, setSelectedUnderlying] = useState<string | null>(null);
+  const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null);
+  const [selectedStrike, setSelectedStrike] = useState<string | null>(null);
+
   const parentRef = useRef<HTMLDivElement>(null);
+
+  // DEBUG: Log the instrument data received from the context
+  useEffect(() => {
+    if (isOpen) {
+        // console.log("DEBUG: Instrument data from context:", instrumentData);
+    }
+  }, [instrumentData, isOpen]);
+
+
+  const segmentOptions = useMemo(() => Array.from(instrumentData.keys()), [instrumentData]);
+
+  const underlyingOptions = useMemo(() => {
+    // console.log("DEBUG: Recalculating underlying options. Current segment:", selectedSegment);
+    if (!selectedSegment) {
+        // console.log("DEBUG: No segment selected, returning empty array.");
+        return [];
+    }
+    const underlyingMap = instrumentData.get(selectedSegment);
+    // console.log("DEBUG: Found underlying map for segment:", underlyingMap);
+
+    if (underlyingMap) {
+        const options = Array.from(underlyingMap.keys());
+        // console.log("DEBUG: Calculated underlying options:", options);
+        return options;
+    }
+
+    // console.log("DEBUG: No underlying map found, returning empty array.");
+    return [];
+  }, [selectedSegment, instrumentData]);
+
+  const { expiryOptions, strikeOptions } = useMemo(() => {
+    if (!selectedSegment || !selectedUnderlying) return { expiryOptions: [], strikeOptions: [] };
+    const underlyingMap = instrumentData.get(selectedSegment);
+    if (!underlyingMap) return { expiryOptions: [], strikeOptions: [] };
+    const instrument = underlyingMap.get(selectedUnderlying);
+    if (!instrument) return { expiryOptions: [], strikeOptions: [] };
+    return {
+      expiryOptions: Array.from(instrument.expiries),
+      strikeOptions: Array.from(instrument.strikes).map(String),
+    };
+  }, [selectedSegment, selectedUnderlying, instrumentData]);
+
+  useEffect(() => {
+    setSelectedUnderlying(null);
+    setSelectedExpiry(null);
+    setSelectedStrike(null);
+  }, [selectedSegment]);
+
+  useEffect(() => {
+    setSelectedExpiry(null);
+    setSelectedStrike(null);
+  }, [selectedUnderlying]);
+
 
   const filteredItems = useMemo(() => {
     const existingKeys = new Set(activeWatchlist?.items.map(item => item.instrument_key));
-    
-    let items = availableItems.filter(item => !existingKeys.has(item.instrument_key));
-    
+    let items = availableItems.filter(item => {
+        if (existingKeys.has(item.instrument_key)) return false;
+        const segmentMatch = !selectedSegment || item.segment === selectedSegment;
+        const underlyingMatch = !selectedUnderlying || item.underlying_symbol === selectedUnderlying;
+        const expiryMatch = !selectedExpiry || item.expiry === selectedExpiry;
+        const strikeMatch = !selectedStrike || String(item.strike_price) === selectedStrike;
+        return segmentMatch && underlyingMatch && expiryMatch && strikeMatch;
+    });
     if (searchTerm) {
       const searchTerms = searchTerm.toLowerCase().split(' ').filter(term => term.trim() !== '');
       items = items.filter(item => {
-        return searchTerms.every(term => 
+        return searchTerms.every(term =>
           item.name.toLowerCase().includes(term) ||
           item.trading_symbol.toLowerCase().includes(term) ||
           item.instrument_key.toLowerCase().includes(term) ||
-          item.strike_price.toString().toLowerCase().includes(term) ||
-          item.segment.toLowerCase().includes(term)
+          item.strike_price.toString().toLowerCase().includes(term)
         );
       });
     }
     return items;
-  }, [searchTerm, activeWatchlist, availableItems]);
+  }, [searchTerm, activeWatchlist, availableItems, selectedSegment, selectedUnderlying, selectedExpiry, selectedStrike]);
 
   const rowVirtualizer = useVirtualizer({
     count: filteredItems.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 52, // Corresponds to p-2 (8px*2) + font sizes and line heights
+    estimateSize: () => 52,
     gap: 0,
   });
 
@@ -74,39 +143,32 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
 
   const handleRowClick = (index: number, event: React.MouseEvent<HTMLDivElement>) => {
     const item = filteredItems[index];
+    if (!item) return;
     const isSelected = selectedItems.some(selected => selected.instrument_key === item.instrument_key);
-    
     if (event.nativeEvent.shiftKey && lastSelectedIndex !== null) {
       const start = Math.min(lastSelectedIndex, index);
       const end = Math.max(lastSelectedIndex, index);
       const itemsToSelect = filteredItems.slice(start, end + 1);
-
       setSelectedItems(prev => {
         const newSelectedSymbols = new Set(prev.map(i => i.instrument_key));
-        if (!isSelected) { // If the current item is not selected, select the range
+        if (!isSelected) {
             itemsToSelect.forEach(itemToAdd => newSelectedSymbols.add(itemToAdd.instrument_key));
-        } else { // If the current item is selected, deselect the range
+        } else {
             const itemsToDeselectSymbols = new Set(itemsToSelect.map(i => i.instrument_key));
             itemsToDeselectSymbols.forEach(symbol => newSelectedSymbols.delete(symbol));
         }
-        const newSelectedItems = availableItems.filter(i => newSelectedSymbols.has(i.instrument_key));
-        return newSelectedItems;
+        return availableItems.filter(i => newSelectedSymbols.has(i.instrument_key));
       });
-
     } else {
         handleSelect(item);
         setLastSelectedIndex(index);
     }
   };
 
-
   const handleSubmit = () => {
     if (selectedItems.length > 0) {
       addItems(selectedItems);
       setIsOpen(false);
-      setSelectedItems([]);
-      setSearchTerm("");
-      setLastSelectedIndex(null);
     } else {
         toast({
             variant: "destructive",
@@ -121,7 +183,16 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
         setSearchTerm("");
         setSelectedItems([]);
         setLastSelectedIndex(null);
+        setSelectedSegment(null);
+        setSelectedUnderlying(null);
+        setSelectedExpiry(null);
+        setSelectedStrike(null);
     }
+  }
+
+  const handleSegmentChange = (value: string) => {
+    console.log("DEBUG: Segment changed to:", value);
+    setSelectedSegment(value);
   }
 
   return (
@@ -135,8 +206,33 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
           </DialogDescription>
         </DialogHeader>
         <div className="flex-1 grid grid-cols-2 gap-6 overflow-hidden">
-            {/* Left Pane */}
             <div className="flex flex-col gap-4 overflow-hidden">
+                <div className="grid grid-cols-2 gap-2">
+                    <Select onValueChange={handleSegmentChange} value={selectedSegment || ""}>
+                        <SelectTrigger><SelectValue placeholder="Select Segment" /></SelectTrigger>
+                        <SelectContent>
+                            {segmentOptions.map((segment, index) => <SelectItem key={`${segment}-${index}`} value={segment}>{segment}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                    <Select onValueChange={setSelectedUnderlying} value={selectedUnderlying || ""} disabled={!selectedSegment}>
+                        <SelectTrigger><SelectValue placeholder="Select Underlying" /></SelectTrigger>
+                        <SelectContent>
+                            {underlyingOptions.map((underlying, index) => <SelectItem key={`${underlying}-${index}`} value={underlying}>{underlying}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                     <Select onValueChange={setSelectedExpiry} value={selectedExpiry || ""} disabled={!selectedUnderlying}>
+                        <SelectTrigger><SelectValue placeholder="Select Expiry" /></SelectTrigger>
+                        <SelectContent>
+                            {expiryOptions.map((expiry, index) => <SelectItem key={`${expiry}-${index}`} value={expiry}>{expiry}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                     <Select onValueChange={setSelectedStrike} value={selectedStrike || ""} disabled={!selectedUnderlying}>
+                        <SelectTrigger><SelectValue placeholder="Select Strike" /></SelectTrigger>
+                        <SelectContent>
+                            {strikeOptions.map((strike, index) => <SelectItem key={`${strike}-${index}`} value={strike}>{strike}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -150,6 +246,7 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
                     <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
                         {rowVirtualizer.getVirtualItems().map(virtualItem => {
                             const item = filteredItems[virtualItem.index];
+                            if (!item) return null;
                             const isSelected = selectedItems.some(selected => selected.instrument_key === item.instrument_key);
                             return (
                                 <div 
@@ -180,7 +277,6 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
                     </div>
                 </div>
             </div>
-            {/* Right Pane */}
             <div className="flex flex-col gap-4 overflow-hidden">
                 <h3 className="font-semibold">{selectedItems.length} items selected</h3>
                 <ScrollArea className="flex-1 border rounded-md">

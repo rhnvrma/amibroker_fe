@@ -4,10 +4,15 @@
 import type { Watchlist, WatchlistItem } from "@/lib/types";
 import { initialData } from "@/lib/initial-data";
 import { useToast } from "@/hooks/use-toast";
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
+import { preprocessInstruments } from "@/lib/utils"; // Make sure you have this utility function
 
 // This will hold the items fetched from the backend.
 let availableItems: Omit<WatchlistItem, "id" | "dateAdded">[] = [];
+
+// Define the type for our preprocessed data
+type PreprocessedData = Map<string, Map<string, { expiries: Set<string>, strikes: Set<number> }>>;
+
 
 export function updateAvailableItems(items: Omit<WatchlistItem, "id" | "dateAdded">[]) {
   availableItems = items;
@@ -30,6 +35,7 @@ interface WatchlistContextType {
   refreshItems: (showToast?: boolean) => Promise<void>;
   availableItems: Omit<WatchlistItem, "id" | "dateAdded">[];
   exportDefaultWatchlistJson: () => void;
+  instrumentData: PreprocessedData; // Add the preprocessed data here
 }
 
 const WatchlistContext = createContext<WatchlistContextType | null>(null);
@@ -42,20 +48,20 @@ const getInitialState = () => {
     const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (storedData) {
       const parsedData = JSON.parse(storedData) as Watchlist[];
-      
+
       // Synchronize with available items
       const availableKeys = new Set(availableItems.map(item => item.instrument_key));
       const syncedWatchlists = parsedData.map((watchlist: Watchlist) => ({
         ...watchlist,
         items: watchlist.items.filter(item => availableKeys.has(item.instrument_key))
       }));
-      
+
       return syncedWatchlists;
     }
   } catch (error) {
     console.error("Failed to parse data from localStorage, using initial data.", error);
   }
-  
+
   // If no stored data or parsing failed, save initial data to localStorage
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialData));
   return initialData;
@@ -66,13 +72,13 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const [watchlists, setWatchlists] = useState<Watchlist[]>([]);
   const [activeWatchlistId, setActiveWatchlistId] = useState<string | null>(null);
   const { toast } = useToast();
-  const [_, setRefreshed] = useState(false);
+  const [refreshed, setRefreshed] = useState(false); // Renamed for clarity
 
   const refreshItems = useCallback(async (showToast: boolean = true) => {
     try {
       const items = await window.electron.refreshItems();
       updateAvailableItems(items);
-      setRefreshed(r => !r);
+      setRefreshed(r => !r); // Trigger a re-render and reprocessing
       if (showToast) {
         toast({
           title: "Items refreshed",
@@ -101,10 +107,18 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
       setWatchlists(data);
       const defaultWatchlist = data.find((wl: Watchlist) => wl.isDefault);
       setActiveWatchlistId(defaultWatchlist ? defaultWatchlist.id : data[0]?.id || null);
+      
+      // Trigger the initial processing
+      setRefreshed(r => !r);
     };
 
     initializeData();
   }, []);
+
+  // Preprocess the instrument data whenever `availableItems` is updated
+  const instrumentData = useMemo(() => {
+    return preprocessInstruments(availableItems);
+  }, [refreshed]); // This now re-runs whenever items are refreshed
 
   useEffect(() => {
     // This effect persists changes to watchlists back to localStorage.
@@ -221,7 +235,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     );
     toast({ title: "Item removed" });
   };
-  
+
   const deleteItems = (itemIds: string[]) => {
     if (!activeWatchlistId) return;
     setWatchlists((prev) =>
@@ -255,7 +269,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     };
     reader.readAsText(file);
   };
-  
+
   const exportWatchlist = () => {
     if (!activeWatchlist) return;
     const dataStr = JSON.stringify(activeWatchlist, null, 2);
@@ -316,6 +330,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         refreshItems,
         availableItems,
         exportDefaultWatchlistJson,
+        instrumentData, // Expose the preprocessed data
       }}
     >
       {children}
