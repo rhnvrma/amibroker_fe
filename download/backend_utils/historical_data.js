@@ -1,34 +1,17 @@
 const fs = require('fs/promises');
 const path = require('path');
 const axios = require('axios');
+const { wrapper } = require('axios-cookiejar-support');
+const { CookieJar } = require('tough-cookie');
 const { format, parse, add, getDay, addDays, subDays, min } = require('date-fns');
 
-// ==============================================================================
-// TOP-LEVEL CONFIGURATION
-// ==============================================================================
-const API_BASE_URL = "https://api.upstox.com/v2/historical-candle";
-const API_ACCESS_TOKEN = "YOUR_API_ACCESS_TOKEN"; // IMPORTANT: Replace with your actual token
-
-const CONCURRENCY_LIMIT = 10; // Max number of instruments to process at the same time.
-const RETRY_ATTEMPTS = 5;
-const RETRY_INITIAL_DELAY = 1000;
-
-const INTERVALS = ['1minute'];
+// --- Configuration ---
+const API_BASE_URL = "https://api.upstox.com/v3/historical-candle";
+const INTERVALS = ['minutes'];
 const GLOBAL_START_DATE = "2023-01-01";
 const END_DATE = format(new Date(), 'yyyy-MM-dd');
-const ROOT_DATA_PATH = "./financial_data_csv"; // Root directory for all CSV files
 
-/**
- * CSV File Format:
- * Each file will contain the following columns:
- * timestamp,open,high,low,close,volume,oi
- * Example: 2024-01-05 15:29:00,2985.9,2986,2985.35,2985.8,11025,0
- */
-
-// ==============================================================================
-// HELPER FUNCTIONS
-// ==============================================================================
-
+// --- Helper Functions ---
 const log = (level, message) => {
     const timestamp = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
     console.log(`${timestamp} - ${level.toUpperCase()} - ${message}`);
@@ -36,140 +19,203 @@ const log = (level, message) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// ==============================================================================
-// NATIVE CONCURRENCY POOL (p-limit alternative)
-// ==============================================================================
+class ConcurrentProcessor {
+    constructor({
+        endpoints,
+        concurrentRequests = 50,
+        clientRefreshThreshold = 200,
+        maxRetries = 3
+    }) {
+        this.endpoints = endpoints;
+        this.concurrentRequests = concurrentRequests;
+        this.clientRefreshThreshold = clientRefreshThreshold;
+        this.maxRetries = maxRetries;
+        this.taskQueue = this.endpoints.map(url => ({ url, retryCount: 0 }));
+        this.successfulResponses = [];
+        this.failedTasks = [];
+        this.totalRequestsFired = 0;
+        this.totalSuccessCount = 0;
+        this.totalFailureCount = 0;
+        this.jar = null;
+        this.client = null;
+    }
 
-/**
- * Runs async tasks from an iterable with a specific concurrency.
- * @param {number} concurrency - The number of tasks to run at the same time.
- * @param {Array<any>} iterable - An array of items to process.
- * @param {Function} iteratorFn - An async function that processes one item.
- * @returns {Promise<Array<any>>} A promise that resolves with the results of all tasks.
- */
-async function asyncPool(concurrency, iterable, iteratorFn) {
-    const results = [];
-    const executing = new Set();
-    let index = 0;
-
-    for (const item of iterable) {
-        // Wrap iteratorFn in a Promise to handle both sync and async functions
-        const p = Promise.resolve().then(() => iteratorFn(item, index++));
-        results.push(p);
-        executing.add(p);
-        
-        const clean = () => executing.delete(p);
-        p.then(clean).catch(clean);
-        
-        // If the pool is full, wait for at least one promise to complete
-        if (executing.size >= concurrency) {
-            await Promise.race(executing);
+    async _handshake(client) {
+        try {
+            if (this.endpoints.length === 0) return true;
+            const baseUrl = new URL(this.endpoints[0]).origin;
+            const r = await client.get(baseUrl, { validateStatus: () => true });
+            log('info', `Handshake to ${baseUrl} -> ${r.status}`);
+            return r.status < 500;
+        } catch (e) {
+            log('error', `Handshake failed with a network error: ${e.constructor.name} -> ${e.message}`);
+            return false;
         }
     }
-    return Promise.all(results);
+
+    async _fireRequest(client, url) {
+        try {
+            const r = await client.get(url, { validateStatus: () => true });
+            return r;
+        } catch (e) {
+            return e;
+        }
+    }
+
+    _handleRetry(url, retryCount, reason) {
+        if (retryCount < this.maxRetries) {
+            const newRetryCount = retryCount + 1;
+            log('warn', `Retrying ${url} (attempt ${newRetryCount}/${this.maxRetries}) due to: ${reason}`);
+            this.taskQueue.push({ url, retryCount: newRetryCount });
+        } else {
+            log('error', `Task ${url} failed after ${this.maxRetries} retries. Reason: ${reason}. Giving up.`);
+            this.failedTasks.push({ url, reason });
+            this.totalFailureCount += 1;
+        }
+    }
+
+    async run() {
+        this.jar = new CookieJar();
+        this.client = wrapper(axios.create({
+            timeout: 30000,
+            jar: this.jar
+        }));
+
+        log('info', "\n=== Initializing single AxiosClient and performing initial handshake... ===");
+        if (!await this._handshake(this.client)) {
+            log('error', "Initial handshake failed. Aborting run.");
+            return [[], this.endpoints.map(url => ({url, reason: "Initial handshake failed"}))];
+        }
+
+        let requestsWithCurrentSession = 0;
+        while (this.taskQueue.length > 0) {
+            const batchSize = Math.min(this.concurrentRequests, this.taskQueue.length);
+            const currentBatch = Array.from({ length: batchSize }, () => this.taskQueue.shift());
+            
+            const tasks = currentBatch.map(({ url }) => this._fireRequest(this.client, url));
+            const results = await Promise.all(tasks);
+
+            this.totalRequestsFired += batchSize;
+            requestsWithCurrentSession += batchSize;
+            let got429 = false;
+
+            results.forEach((result, index) => {
+                const { url, retryCount } = currentBatch[index];
+                if (result instanceof Error) {
+                    this._handleRetry(url, retryCount, `RequestError (${result.constructor.name})`);
+                } else {
+                    if (result.status === 200) {
+                        this.successfulResponses.push(result);
+                        this.totalSuccessCount += 1;
+                    } else if (result.status === 429) {
+                        log('warn', `-> 429 Rate Limit Hit for ${url}. Re-queuing task.`);
+                        this.taskQueue.push({ url, retryCount });
+                        got429 = true;
+                    } else if (result.status >= 500) {
+                        this._handleRetry(url, retryCount, `Server Error (Status ${result.status})`);
+                    } else {
+                        const reason = `Client Error (Status ${result.status})`;
+                        log('error', `Task ${url} failed permanently. Reason: ${reason}`);
+                        this.failedTasks.push({ url, reason });
+                        this.totalFailureCount += 1;
+                    }
+                }
+            });
+
+            log('info', 
+                `Batch Complete -> Success: ${this.totalSuccessCount}, Fail: ${this.totalFailureCount} | ` +
+                `Attempted: ${this.totalRequestsFired} | Session Reqs: ${requestsWithCurrentSession} | ` +
+                `Queue: ${this.taskQueue.length}`
+            );
+
+            if ((got429 || requestsWithCurrentSession >= this.clientRefreshThreshold) && this.taskQueue.length > 0) {
+                if (got429) {
+                    log('info', "\n>>> Rate limit detected. Clearing cookies and re-handshaking after a delay.");
+                    await sleep(2000 + Math.random() * 2000);
+                } else {
+                    log('info', `\n>>> Client refresh threshold (${this.clientRefreshThreshold}) reached. Clearing cookies and re-handshaking.`);
+                }
+
+                this.jar.removeAllCookiesSync();
+                requestsWithCurrentSession = 0;
+
+                if (!await this._handshake(this.client)) {
+                    log('error', "Re-handshake failed. Re-queuing batch and pausing before next attempt.");
+                    this.taskQueue.unshift(...currentBatch);
+                    await sleep(5000);
+                }
+            }
+        }
+
+        log('info', `\n--- Processing Complete ---`);
+        log('info', `Final Score -> Total Succeeded: ${this.successfulResponses.length}, Total Failed: ${this.failedTasks.length}`);
+        return [this.successfulResponses, this.failedTasks];
+    }
 }
 
 
-// ==============================================================================
-// CSV HELPER FUNCTIONS
-// ==============================================================================
 
-/**
- * Prepares a CSV file for writing and determines the correct start date for fetching data.
- * If the file doesn't exist, it creates it with a header.
- * If it exists, it reads the last entry to avoid re-fetching old data, and removes the last day's
- * data to ensure the final day is always complete.
- * @param {string} filePath - The full path to the CSV file.
- * @param {string} defaultStartDate - The start date to use if the file is new.
- * @returns {Promise<string>} The calculated start date for the API fetch.
- */
 async function prepareCsvAndGetStartDate(filePath, defaultStartDate) {
-    const csvHeader = 'timestamp,open,high,low,close,volume,oi\n';
-
     try {
-        await fs.access(filePath); // Check if file exists
+        await fs.access(filePath);
         const fileContent = await fs.readFile(filePath, 'utf-8');
-        const lines = fileContent.trim().split('\n');
-
-        if (lines.length <= 1) { // File exists but is empty or only has a header
-            log('info', `[${path.basename(filePath)}] File is empty. Fetching from ${defaultStartDate}.`);
-            // await fs.writeFile(filePath, csvHeader);
+        const trimmedContent = fileContent.trim();
+        if (!trimmedContent) {
             return defaultStartDate;
         }
-
+        const lines = trimmedContent.split('\n');
         const lastLine = lines[lines.length - 1];
-        const lastTimestamp = lastLine.split(',')[0]; // Assumes timestamp is the first column
-        const fetchStartDate = lastTimestamp.slice(0, 10); // 'yyyy-MM-dd'
+        const lastTimestamp = lastLine.split(',')[0];
+        const fetchStartDate = lastTimestamp.slice(0, 10);
 
-        // To ensure the last day is always complete, we remove partial data for that day and re-fetch it.
         const contentToKeep = lines.slice(1).filter(line => !line.startsWith(fetchStartDate));
         const newContent = contentToKeep.join('\n') + (contentToKeep.length > 0 ? '\n' : '');
         
         await fs.writeFile(filePath, newContent, 'utf-8');
-
         log('info', `[${path.basename(filePath)}] Last entry on ${lastTimestamp}. Re-fetching from ${fetchStartDate}.`);
         return fetchStartDate;
 
     } catch (error) {
-        // This block runs if fs.access throws an error (i.e., file does not exist)
-        log('info', `[${path.basename(filePath)}] No previous file. Creating and fetching from ${defaultStartDate}.`);
+        log('info', `[${path.basename(filePath)}] New file. Creating and fetching from ${defaultStartDate}.`);
         const dir = path.dirname(filePath);
-        await fs.mkdir(dir, { recursive: true }); // Ensure directory exists
-        // await fs.writeFile(filePath, csvHeader);
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(filePath,'');
         return defaultStartDate;
     }
 }
 
-/**
- * Appends an array of candle data to the specified CSV file.
- * @param {string} filePath - The full path to the CSV file.
- * @param {Array<Array>} candles - The candle data fetched from the API.
- */
-async function appendDataToCsv(filePath, candles) {
-    if (!candles || candles.length === 0) {
+async function sortAndAppendData(filePath, allCandles) {
+    if (!allCandles || allCandles.length === 0) {
         return;
     }
-
     try {
-        const csvRows = candles.map(candle => {
-            // const formattedTimestamp = candle[0].slice(0, 19).replace('T', ' ');
-            // candle format: [timestamp, open, high, low, close, volume, oi]
-            return [candle[0], candle[1], candle[2], candle[3], candle[4], candle[5], candle[6]].join(',');
-        }).join('\n') + '\n';
-
+        allCandles.sort((a, b) => a[0].localeCompare(b[0]));
+        const csvRows = allCandles.map(candle => candle.join(',')).join('\n') + '\n';
         await fs.appendFile(filePath, csvRows, 'utf-8');
-        log('info', `✅ [${path.basename(filePath)}] Appended ${candles.length} new rows to the file.`);
+        log('info', `✅ [${path.basename(filePath)}] Appended ${allCandles.length} new rows.`);
     } catch (e) {
         log('error', `[${path.basename(filePath)}] CSV Append Error: ${e.message}`);
     }
 }
 
-// ==============================================================================
-// DATA FETCHING & DATE LOGIC
-// ==============================================================================
-
 function adjustDateToWeekday(dateObj, isStartDate) {
     const weekday = getDay(dateObj);
     if (isStartDate) {
-        if (weekday === 6) return addDays(dateObj, 2); // Saturday -> Monday
-        if (weekday === 0) return addDays(dateObj, 1); // Sunday -> Monday
+        if (weekday === 6) return addDays(dateObj, 2); // Sat -> Mon
+        if (weekday === 0) return addDays(dateObj, 1);  // Sun -> Mon
     } else {
-        if (weekday === 6) return subDays(dateObj, 1); // Saturday -> Friday
-        if (weekday === 0) return subDays(dateObj, 2); // Sunday -> Friday
+        if (weekday === 6) return subDays(dateObj, 1); // Sat -> Fri
+        if (weekday === 0) return subDays(dateObj, 2);  // Sun -> Fri
     }
     return dateObj;
 }
 
-function getDateRanges(startDateStr, endDateStr, interval) {
-    let startDate = parse(startDateStr, 'yyyy-MM-dd', new Date());
-    let endDate = parse(endDateStr, 'yyyy-MM-dd', new Date());
-    startDate = adjustDateToWeekday(startDate, true);
-    endDate = adjustDateToWeekday(endDate, false);
-
+function getDateRanges(startDateStr, endDateStr) {
+    let startDate = adjustDateToWeekday(parse(startDateStr, 'yyyy-MM-dd', new Date()), true);
+    let endDate = adjustDateToWeekday(parse(endDateStr, 'yyyy-MM-dd', new Date()), false);
     if (startDate > endDate) return [];
     
-    // Upstox API limit for 1-minute data is about 1 month. Using 28 days for safety.
-    const delta = interval.includes('minute') ? { days: 28 } : { years: 10 };
+    const delta = { days: 28 };
     const dateChunks = [];
     let currentStart = startDate;
 
@@ -183,105 +229,80 @@ function getDateRanges(startDateStr, endDateStr, interval) {
     return dateChunks;
 }
 
-async function fetchCandleDataChunk(session, instrumentKey, interval, fromDate, toDate) {
-    const url = `${API_BASE_URL}/${instrumentKey}/${interval}/${toDate}/${fromDate}`;
-    const headers = { 'Accept': 'application/json', 'Authorization': `Bearer ${API_ACCESS_TOKEN}` };
-    const requestId = `${instrumentKey.padEnd(20)} | ${interval} | ${fromDate} to ${toDate}`;
-    let delay = RETRY_INITIAL_DELAY;
 
-    for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-        try {
-            const response = await session.get(url, { headers, timeout: 30000 });
-            return response.data?.data?.candles || [];
-        } catch (error) {
-            const status = error.response?.status;
-            if ([429, 503, 504].includes(status) || error.code === 'ECONNRESET') {
-                 log('warn', `[RETRYING] ${requestId} - Status: ${status || error.code}. Attempt ${attempt}/${RETRY_ATTEMPTS}.`);
-            } else {
-                 log('error', `[FAILED] ${requestId} - Status: ${status}, Reason: ${error.message}`);
-                 return null; // Don't retry on other errors (e.g., 401, 404)
-            }
-        }
-        if (attempt < RETRY_ATTEMPTS) {
-            await sleep(delay);
-            delay *= 2; // Exponential backoff
-        }
-    }
-    log('error', `[GAVE UP] ${requestId} after ${RETRY_ATTEMPTS} attempts.`);
-    return null;
-}
+async function fetchAndStoreData(itemsToFetch, rootPath, options = {}) {
+    const {
+        concurrentRequests = 200,
+        clientRefreshThreshold = 200,
+        maxRetries = 3
+    } = options;
 
-// ==============================================================================
-// MAIN ORCHESTRATION
-// ==============================================================================
-
-/**
- * Processes a single instrument: prepares CSV, fetches data, and saves data.
- * @param {object} session - axios instance
- * @param {object} item - The item object containing the instrument_key and trading_symbol.
- * @param {string} rootPath - The root directory to save CSV files.
- */
-async function processInstrument(session, item, rootPath) {
-    const instrumentKey = item.instrument_key;
-    for (const interval of INTERVALS) {
-        const fileName = `${item.trading_symbol.replace(/\|/g, '_')}.txt`;
-        const filePath = path.join(rootPath, fileName);
-        log('info', `[${fileName}] Starting process...`);
-
-        // 1. Prepare CSV file and get the correct start date
-        const startDate = await prepareCsvAndGetStartDate(filePath, GLOBAL_START_DATE);
-
-        // 2. Get date ranges to fetch
-        const dateRanges = getDateRanges(startDate, END_DATE, interval);
-        if (dateRanges.length === 0) {
-            log('info', `[${fileName}] No new date ranges to fetch. Process complete.`);
-            continue;
-        }
-
-        // 3. Download all data chunks for this instrument in parallel
-        const downloadTasks = dateRanges.map(range =>
-            fetchCandleDataChunk(session, instrumentKey, interval, range.from, range.to)
-        );
-        const results = await Promise.all(downloadTasks);
-        const allCandles = results.flat().filter(Boolean); // Flatten chunks and remove nulls
-        log('info', `[${fileName}] Download complete. Fetched: ${allCandles.length} candles.`);
-        
-        // 4. Sort all candles chronologically before saving
-        allCandles.sort((a, b) => a[0].localeCompare(b[0]));
-
-        // 5. Save the sorted data
-        await appendDataToCsv(filePath, allCandles);
-    }
-}
-
-/**
- * Main function to orchestrate the fetching and storing of data for a given list of instruments.
- * @param {Array<object>} itemsToFetch - A list of items, each with an 'instrument_key' and 'trading_symbol'.
- * @param {string} rootPath - The root directory where CSV files will be stored.
- */
-async function fetchAndStoreData(itemsToFetch, rootPath) {
     const startMainTime = performance.now();
     log('info', `--- SCRIPT STARTING FOR ${itemsToFetch.length} INSTRUMENTS ---`);
 
-    const session = axios.create();
+    // 1. Prepare all URLs and metadata
+    log('info', 'Preparing all API requests...');
+    const allUrls = [];
+    const urlMetadataMap = {};
 
-    // Use the native asyncPool to process instruments with controlled concurrency
-    await asyncPool(
-        CONCURRENCY_LIMIT,
-        itemsToFetch,
-        (item) => processInstrument(session, item, rootPath)
+    for (const item of itemsToFetch) {
+        for (const interval of INTERVALS) {
+            const fileName = `${item.trading_symbol.replace(/\|/g, '_')}.txt`;
+            const filePath = path.join(rootPath, fileName);
+            
+            const startDate = await prepareCsvAndGetStartDate(filePath, GLOBAL_START_DATE);
+            const dateRanges = getDateRanges(startDate, END_DATE);
+
+            for (const range of dateRanges) {
+                // IMPORTANT: The Upstox API v3 uses to_date before from_date in the URL path
+                const url = `${API_BASE_URL}/${encodeURIComponent(item.instrument_key)}/${interval}/1/${range.to}/${range.from}`;
+                allUrls.push(url);
+                urlMetadataMap[url] = { filePath };
+            }
+        }
+    }
+    
+    if (allUrls.length === 0) {
+        log('info', 'All data is already up-to-date. Nothing to fetch.');
+        return;
+    }
+
+    log('info', `A total of ${allUrls.length} API requests will be made.`);
+
+    // 2. Run the processor with all URLs
+    const processor = new ConcurrentProcessor({
+        endpoints: allUrls,
+        concurrentRequests,
+        clientRefreshThreshold,
+        maxRetries
+    });
+    const [successes, failures] = await processor.run();
+
+    // 3. Aggregate results by file
+    log('info', 'Aggregating downloaded data...');
+    const dataToSave = {};
+    for (const response of successes) {
+        const url = response.config.url;
+        const metadata = urlMetadataMap[url];
+        if (metadata) {
+            const candles = response.data?.data?.candles || [];
+            if (!dataToSave[metadata.filePath]) {
+                dataToSave[metadata.filePath] = [];
+            }
+            dataToSave[metadata.filePath].push(...candles);
+        }
+    }
+
+    // 4. Save data to files
+    log('info', 'Saving data to respective files...');
+    const saveTasks = Object.entries(dataToSave).map(([filePath, candles]) => 
+        sortAndAppendData(filePath, candles)
     );
-
+    await Promise.all(saveTasks);
+    
     const mainDuration = (performance.now() - startMainTime) / 1000;
     log('info', `\n=== Script finished in ${mainDuration.toFixed(2)} seconds ===`);
 }
-
-// ==============================================================================
-// SCRIPT ENTRY POINT
-// ==============================================================================
-
-// Self-invoking async function to run the script
-
 
 module.exports = {
     fetchAndStoreData
