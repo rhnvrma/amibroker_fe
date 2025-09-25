@@ -142,3 +142,66 @@ body {
     border-width: 0;
   }
 }
+.title-bar {
+  -webkit-app-region: drag; /* Allows the window to be dragged */
+  height: 38px;
+  background-color: #1e1e1e00;
+  display: flex;
+  align-items: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 9999;
+  pointer-events: none; 
+}
+
+.title-bar-text {
+  -webkit-app-region: no-drag;
+  pointer-events: none;
+  user-select: none;
+  color: #cccccc;
+  font-size: 13px;
+  text-align: center;
+  flex-grow: 1; /* Center the text */
+}
+
+.window-controls {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
+  gap: 8px; /* Space between buttons */
+  pointer-events: auto; 
+}
+
+.title-bar-button {
+  -webkit-app-region: no-drag;
+  border: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: default;
+  padding: 0;
+  transition: opacity 0.2s ease;
+}
+
+.title-bar-button svg {
+  opacity: 0; /* Icons are hidden by default */
+  transition: opacity 0.2s ease-in-out;
+}
+
+.title-bar-button:hover svg {
+  opacity: 1; /* Show icon on hover */
+}
+
+#close-btn { background-color: #ff5f57; }
+#minimize-btn { background-color: #ffbd2e; }
+#maximize-btn { background-color: #28c940; }
+.content-area {
+  /* This pushes the content down by the exact height of your title bar */
+  padding-top: 38px;
+}

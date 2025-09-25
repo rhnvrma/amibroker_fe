@@ -1,9 +1,9 @@
-// src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { WatchlistProvider } from "@/contexts/watchlist-context";
 import { LoginDialogProvider } from "@/contexts/login-dialog-context";
+import TitleBar from "@/components/titlebar";
 
 export const metadata: Metadata = {
   title: "Watchtower",
@@ -17,12 +17,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      {/* The <head> tag should be the first child of <html> */}
       <head>
-        {/*
-          This CSP is configured for development.
-          It allows inline scripts and styles, and loading fonts from Google.
-          For production, you should consider a more restrictive policy.
-        */}
         <meta
           httpEquiv="Content-Security-Policy"
           content="
@@ -33,11 +29,16 @@ export default function RootLayout({
           "
         />
       </head>
+
+      {/* The <body> tag comes after <head> */}
       <body className="font-body antialiased">
-        <WatchlistProvider>
-          <LoginDialogProvider>{children}</LoginDialogProvider>
-        </WatchlistProvider>
-        <Toaster />
+        <TitleBar /> {/* TitleBar should be the first item in the body */}
+        <div className="content-area">
+          <WatchlistProvider>
+            <LoginDialogProvider>{children}</LoginDialogProvider>
+          </WatchlistProvider>
+          <Toaster />
+        </div>
       </body>
     </html>
   );

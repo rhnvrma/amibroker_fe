@@ -15,6 +15,9 @@ declare global {
       selectFolder: () => Promise<string | undefined>;
       saveCredentials: (data: any) => Promise<any>;
       saveAccessToken: () => Promise<any>;
+      minimizeWindow: () => void;
+      maximizeWindow: () => void;
+      closeWindow: () => void;
     };
   }
 }

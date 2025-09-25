@@ -161,7 +161,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
                 </FormItem>
               )}
             />
-            <FormField
+            {/* <FormField
               control={form.control}
               name="apiSecret"
               render={({ field }) => (
@@ -173,7 +173,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
                   <FormMessage />
                 </FormItem>
               )}
-            />
+            /> */}
             <FormField
               control={form.control}
               name="mobileNumber"

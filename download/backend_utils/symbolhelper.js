@@ -55,14 +55,12 @@ function getTradingSymbol(instrument) {
         switch (instrument_type) {
             case 'CE':
             case 'PE':
-                // The python logic filters for NIFTY only
                 if (!expiry || strike_price === undefined) {
                     return null; // Equivalent to 'continue' in the loop
                 }
                 const optionExpiry = new Date(expiry); // Python expiry is in ms for JS Date
                 return generateDerivativeSymbol(name, optionExpiry, strike_price, instrument_type,exchange);
             case 'FUT':
-                // The python logic filters for NIFTY only
                 if ( !expiry) {
                     return null; // Equivalent to 'continue' in the loop
                 }

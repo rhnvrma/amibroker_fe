@@ -8,7 +8,7 @@ const { format, parse, add, getDay, addDays, subDays, min } = require('date-fns'
 // --- Configuration ---
 const API_BASE_URL = "https://api.upstox.com/v3/historical-candle";
 const INTERVALS = ['minutes'];
-const GLOBAL_START_DATE = "2023-01-01";
+const GLOBAL_START_DATE = "2025-01-01";
 const END_DATE = format(new Date(), 'yyyy-MM-dd');
 
 // --- Helper Functions ---
@@ -84,14 +84,16 @@ class ConcurrentProcessor {
         log('info', "\n=== Initializing single AxiosClient and performing initial handshake... ===");
         if (!await this._handshake(this.client)) {
             log('error', "Initial handshake failed. Aborting run.");
-            return [[], this.endpoints.map(url => ({url, reason: "Initial handshake failed"}))];
+            return [
+                [], this.endpoints.map(url => ({ url, reason: "Initial handshake failed" }))
+            ];
         }
 
         let requestsWithCurrentSession = 0;
         while (this.taskQueue.length > 0) {
             const batchSize = Math.min(this.concurrentRequests, this.taskQueue.length);
             const currentBatch = Array.from({ length: batchSize }, () => this.taskQueue.shift());
-            
+
             const tasks = currentBatch.map(({ url }) => this._fireRequest(this.client, url));
             const results = await Promise.all(tasks);
 
@@ -115,14 +117,17 @@ class ConcurrentProcessor {
                         this._handleRetry(url, retryCount, `Server Error (Status ${result.status})`);
                     } else {
                         const reason = `Client Error (Status ${result.status})`;
-                        log('error', `Task ${url} failed permanently. Reason: ${reason}`);
+                        // Don't log 404s as errors, they are expected for missing data
+                        if (result.status !== 404) {
+                            log('error', `Task ${url} failed permanently. Reason: ${reason}`);
+                        }
                         this.failedTasks.push({ url, reason });
                         this.totalFailureCount += 1;
                     }
                 }
             });
 
-            log('info', 
+            log('info',
                 `Batch Complete -> Success: ${this.totalSuccessCount}, Fail: ${this.totalFailureCount} | ` +
                 `Attempted: ${this.totalRequestsFired} | Session Reqs: ${requestsWithCurrentSession} | ` +
                 `Queue: ${this.taskQueue.length}`
@@ -153,24 +158,23 @@ class ConcurrentProcessor {
     }
 }
 
-
-
 async function prepareCsvAndGetStartDate(filePath, defaultStartDate) {
     try {
         await fs.access(filePath);
         const fileContent = await fs.readFile(filePath, 'utf-8');
-        const trimmedContent = fileContent.trim();
-        if (!trimmedContent) {
+        const lines = fileContent.trim().split('\n');
+
+        if (lines.length === 0 || (lines.length === 1 && lines[0].trim() === '')) {
             return defaultStartDate;
         }
-        const lines = trimmedContent.split('\n');
+
         const lastLine = lines[lines.length - 1];
         const lastTimestamp = lastLine.split(',')[0];
         const fetchStartDate = lastTimestamp.slice(0, 10);
 
-        const contentToKeep = lines.slice(1).filter(line => !line.startsWith(fetchStartDate));
+        const contentToKeep = lines.filter(line => !line.startsWith(fetchStartDate));
         const newContent = contentToKeep.join('\n') + (contentToKeep.length > 0 ? '\n' : '');
-        
+
         await fs.writeFile(filePath, newContent, 'utf-8');
         log('info', `[${path.basename(filePath)}] Last entry on ${lastTimestamp}. Re-fetching from ${fetchStartDate}.`);
         return fetchStartDate;
@@ -179,7 +183,7 @@ async function prepareCsvAndGetStartDate(filePath, defaultStartDate) {
         log('info', `[${path.basename(filePath)}] New file. Creating and fetching from ${defaultStartDate}.`);
         const dir = path.dirname(filePath);
         await fs.mkdir(dir, { recursive: true });
-        await fs.writeFile(filePath,'');
+        await fs.writeFile(filePath, '');
         return defaultStartDate;
     }
 }
@@ -189,12 +193,29 @@ async function sortAndAppendData(filePath, allCandles) {
         return;
     }
     try {
-        allCandles.sort((a, b) => a[0].localeCompare(b[0]));
-        const csvRows = allCandles.map(candle => candle.join(',')).join('\n') + '\n';
-        await fs.appendFile(filePath, csvRows, 'utf-8');
-        log('info', `✅ [${path.basename(filePath)}] Appended ${allCandles.length} new rows.`);
+        // Create a Set of existing timestamps to prevent duplicates
+        const existingContent = await fs.readFile(filePath, 'utf-8');
+        const existingTimestamps = new Set(existingContent.split('\n').map(line => line.split(',')[0]));
+
+        const newUniqueCandles = allCandles.filter(candle => !existingTimestamps.has(candle[0]));
+        
+        if (newUniqueCandles.length === 0) {
+            log('info', `[${path.basename(filePath)}] No new unique rows to append.`);
+            return;
+        }
+
+        // Combine, sort, and save
+        const allLines = existingContent.trim().split('\n').filter(Boolean); // Read existing lines, remove empty ones
+        const combinedData = [...allLines, ...newUniqueCandles.map(c => c.join(','))];
+        
+        combinedData.sort((a, b) => a.split(',')[0].localeCompare(b.split(',')[0]));
+
+        const csvContent = combinedData.join('\n') + '\n';
+        await fs.writeFile(filePath, csvContent, 'utf-8');
+
+        log('info', `✅ [${path.basename(filePath)}] Wrote ${combinedData.length} total rows (${newUniqueCandles.length} new).`);
     } catch (e) {
-        log('error', `[${path.basename(filePath)}] CSV Append Error: ${e.message}`);
+        log('error', `[${path.basename(filePath)}] CSV Write/Append Error: ${e.message}`);
     }
 }
 
@@ -214,7 +235,7 @@ function getDateRanges(startDateStr, endDateStr) {
     let startDate = adjustDateToWeekday(parse(startDateStr, 'yyyy-MM-dd', new Date()), true);
     let endDate = adjustDateToWeekday(parse(endDateStr, 'yyyy-MM-dd', new Date()), false);
     if (startDate > endDate) return [];
-    
+
     const delta = { days: 28 };
     const dateChunks = [];
     let currentStart = startDate;
@@ -229,7 +250,7 @@ function getDateRanges(startDateStr, endDateStr) {
     return dateChunks;
 }
 
-
+// --- Main fetchAndStoreData function with PROBE logic ---
 async function fetchAndStoreData(itemsToFetch, rootPath, options = {}) {
     const {
         concurrentRequests = 200,
@@ -240,66 +261,142 @@ async function fetchAndStoreData(itemsToFetch, rootPath, options = {}) {
     const startMainTime = performance.now();
     log('info', `--- SCRIPT STARTING FOR ${itemsToFetch.length} INSTRUMENTS ---`);
 
-    // 1. Prepare all URLs and metadata
-    log('info', 'Preparing all API requests...');
-    const allUrls = [];
-    const urlMetadataMap = {};
+    const dataToSave = {};
+
+    // =========================================================================
+    // == STAGE 1: PROBE - Fetch most recent historical chunk for each instrument
+    // =========================================================================
+    log('info', '--- Stage 1: Creating HISTORICAL PROBE tasks ---');
+    const probeUrls = [];
+    const probeUrlMetadataMap = {};
+    const instrumentDateRanges = {};
 
     for (const item of itemsToFetch) {
         for (const interval of INTERVALS) {
+            const uniqueKey = `${item.instrument_key}_${interval}`;
             const fileName = `${item.trading_symbol.replace(/\|/g, '_')}.txt`;
             const filePath = path.join(rootPath, fileName);
             
             const startDate = await prepareCsvAndGetStartDate(filePath, GLOBAL_START_DATE);
             const dateRanges = getDateRanges(startDate, END_DATE);
+            instrumentDateRanges[uniqueKey] = dateRanges;
 
-            for (const range of dateRanges) {
-                // IMPORTANT: The Upstox API v3 uses to_date before from_date in the URL path
-                const url = `${API_BASE_URL}/${encodeURIComponent(item.instrument_key)}/${interval}/1/${range.to}/${range.from}`;
-                allUrls.push(url);
-                urlMetadataMap[url] = { filePath };
+            if (dateRanges.length > 0) {
+                const probeRange = dateRanges[dateRanges.length - 1];
+                const url = `${API_BASE_URL}/${encodeURIComponent(item.instrument_key)}/${interval}/1/${probeRange.to}/${probeRange.from}`;
+                probeUrls.push(url);
+                probeUrlMetadataMap[url] = { filePath, uniqueKey };
             }
         }
     }
     
-    if (allUrls.length === 0) {
-        log('info', 'All data is already up-to-date. Nothing to fetch.');
-        return;
-    }
+    const validCombos = new Set();
+    if (probeUrls.length > 0) {
+        log('info', `Created ${probeUrls.length} probe tasks. Running historical probe...`);
+        const probeProcessor = new ConcurrentProcessor({ endpoints: probeUrls, ...options });
+        const [probeSuccesses, _] = await probeProcessor.run();
 
-    log('info', `A total of ${allUrls.length} API requests will be made.`);
-
-    // 2. Run the processor with all URLs
-    const processor = new ConcurrentProcessor({
-        endpoints: allUrls,
-        concurrentRequests,
-        clientRefreshThreshold,
-        maxRetries
-    });
-    const [successes, failures] = await processor.run();
-
-    // 3. Aggregate results by file
-    log('info', 'Aggregating downloaded data...');
-    const dataToSave = {};
-    for (const response of successes) {
-        const url = response.config.url;
-        const metadata = urlMetadataMap[url];
-        if (metadata) {
+        log('info', "\n--- Analyzing historical probe results ---");
+        for (const response of probeSuccesses) {
+            const url = response.config.url;
+            const metadata = probeUrlMetadataMap[url];
             const candles = response.data?.data?.candles || [];
-            if (!dataToSave[metadata.filePath]) {
-                dataToSave[metadata.filePath] = [];
+            if (candles.length > 0) {
+                log('info', `Probe SUCCESS for ${metadata.uniqueKey}. Will fetch full history.`);
+                validCombos.add(metadata.uniqueKey);
+                if (!dataToSave[metadata.filePath]) dataToSave[metadata.filePath] = [];
+                dataToSave[metadata.filePath].push(...candles);
+            } else {
+                log('info', `Probe found NO DATA for ${metadata.uniqueKey}.`);
             }
-            dataToSave[metadata.filePath].push(...candles);
         }
     }
 
-    // 4. Save data to files
-    log('info', 'Saving data to respective files...');
-    const saveTasks = Object.entries(dataToSave).map(([filePath, candles]) => 
+    // =========================================================================
+    // == STAGE 2: INTRADAY - Fetch today's data for ALL instruments
+    // =========================================================================
+    log('info', '\n--- Stage 2: Creating INTRADAY tasks for all instruments ---');
+    const intradayUrls = [];
+    const intradayUrlMetadataMap = {};
+    for (const item of itemsToFetch) {
+        const fileName = `${item.trading_symbol.replace(/\|/g, '_')}.txt`;
+        const filePath = path.join(rootPath, fileName);
+        const url = `${API_BASE_URL}/intraday/${encodeURIComponent(item.instrument_key)}/minutes/1`;
+        intradayUrls.push(url);
+        intradayUrlMetadataMap[url] = { filePath };
+    }
+
+    if (intradayUrls.length > 0) {
+        log('info', `Created ${intradayUrls.length} intraday tasks. Running intraday fetch...`);
+        const intradayProcessor = new ConcurrentProcessor({ endpoints: intradayUrls, ...options });
+        const [intradaySuccesses, _] = await intradayProcessor.run();
+
+        log('info', "\n--- Analyzing intraday results ---");
+        for (const response of intradaySuccesses) {
+            const url = response.config.url;
+            const metadata = intradayUrlMetadataMap[url];
+            const candles = response.data?.data?.candles || [];
+            if (candles.length > 0) {
+                if (!dataToSave[metadata.filePath]) dataToSave[metadata.filePath] = [];
+                dataToSave[metadata.filePath].push(...candles);
+            }
+        }
+    }
+
+
+    // ======================================================================
+    // == STAGE 3: MAIN FETCH - Fetch remaining history for valid instruments
+    // ======================================================================
+    log('info', '\n--- Stage 3: Creating MAIN tasks for full history of valid instruments ---');
+    const mainUrls = [];
+    const mainUrlMetadataMap = {};
+
+    for (const item of itemsToFetch) {
+        for (const interval of INTERVALS) {
+            const uniqueKey = `${item.instrument_key}_${interval}`;
+            if (!validCombos.has(uniqueKey)) continue;
+            
+            const fileName = `${item.trading_symbol.replace(/\|/g, '_')}.txt`;
+            const filePath = path.join(rootPath, fileName);
+            const dateRanges = instrumentDateRanges[uniqueKey];
+            
+            const rangesToFetch = dateRanges.slice(0, -1); 
+
+            for (const range of rangesToFetch) {
+                const url = `${API_BASE_URL}/${encodeURIComponent(item.instrument_key)}/${interval}/1/${range.to}/${range.from}`;
+                mainUrls.push(url);
+                mainUrlMetadataMap[url] = { filePath };
+            }
+        }
+    }
+    
+    if (mainUrls.length > 0) {
+        log('info', `A total of ${mainUrls.length} main API requests will be made.`);
+        const mainProcessor = new ConcurrentProcessor({ endpoints: mainUrls, ...options });
+        const [mainSuccesses, _] = await mainProcessor.run();
+
+        for (const response of mainSuccesses) {
+            const url = response.config.url;
+            const metadata = mainUrlMetadataMap[url];
+            if (metadata) {
+                const candles = response.data?.data?.candles || [];
+                if (!dataToSave[metadata.filePath]) dataToSave[metadata.filePath] = [];
+                dataToSave[metadata.filePath].push(...candles);
+            }
+        }
+    } else {
+        log('info', 'No further historical data needed beyond the probe results.');
+    }
+
+    // =============================================
+    // == STAGE 4: SAVE - Write all aggregated data
+    // =============================================
+    log('info', '\n--- Stage 4: Saving all aggregated data to respective files ---');
+    const saveTasks = Object.entries(dataToSave).map(([filePath, candles]) =>
         sortAndAppendData(filePath, candles)
     );
     await Promise.all(saveTasks);
-    
+
     const mainDuration = (performance.now() - startMainTime) / 1000;
     log('info', `\n=== Script finished in ${mainDuration.toFixed(2)} seconds ===`);
 }

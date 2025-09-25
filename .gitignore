@@ -137,3 +137,8 @@ my-select-app/
 download/main.js
 NIFTY_Options.csv
 final_fe.zip
+download/MarketDataFeedV3_pb2.py
+download/newtoken.py
+download/historical_data/NSE_FO_49907_1minutes.csv
+download/historical_data/NSE_INDEX_Nifty Bank_1minutes.csv
+download/__pycache__/MarketDataFeedV3_pb2.cpython-312.pyc

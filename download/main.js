@@ -11,7 +11,7 @@ const {convertToJson}=require("./src/lib/json_utils");
 const winax = require('winax');
 const { getTradingSymbol } = require('./backend_utils/symbolhelper');
 const { sendToPipe } = require("./backend_utils/pipe_send");
-const { fetchAndStoreData } = require("./backend_utils/historical_data");
+const {  fetchAndStoreData } = require("./backend_utils/historical_data");
 
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
@@ -19,6 +19,23 @@ const isDev = process.env.NODE_ENV === 'development';
 let mainWindow;
 let loadingWindow;
 let isQuitting = false; // Add this flag
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // If we don't get the lock, another instance is already running.
+  // Quit this new instance.
+  app.quit();
+} else {
+  // If we get the lock, this is the primary instance.
+  // Set up a listener for when another instance is launched.
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    // Someone tried to run a second instance, we should focus our window.
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
 
 function createLoadingScreen() {
   loadingWindow = new BrowserWindow({
@@ -65,25 +82,8 @@ function createWindow() {
         slashes: true,
       })
     );
-    mainWindow.setMenu(null);
+    // mainWindow.setMenu(null);
   }
-}
-
-// Mock external login function
-async function mockExternalLogin(credentials) {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        success: false,
-        token: `mock_token_${Date.now()}`,
-        // Simulate a refreshed list of items
-        refreshedItems: [
-            { name: "NIFTY", segment: "NFO_OPT", underlying_symbol: "NIFTY", instrument_key: "NFO_OPT|53137", exchange_token: "53137", minimum_lot: 50, trading_symbol: "NIFTY 28MAR24 22000 CE", strike_price: 22000 },
-            { name: "BANKNIFTY", segment: "NFO_OPT", underlying_symbol: "BANKNIFTY", instrument_key: "NFO_OPT|40042", exchange_token: "40042", minimum_lot: 15, trading_symbol: "BANKNIFTY 27MAR24 46500 CE", strike_price: 46500 },
-        ],
-      });
-    }, 1000);
-  });
 }
 
 // IPC Handlers
