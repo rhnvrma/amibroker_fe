@@ -12,7 +12,15 @@ const winax = require('winax');
 const { getTradingSymbol } = require('./backend_utils/symbolhelper');
 const { sendToPipe } = require("./backend_utils/pipe_send");
 const {  fetchAndStoreData } = require("./backend_utils/historical_data");
+const log = require('electron-log');
 
+// --- SETUP ELECTRON-LOG ---
+// This overrides the default console.log behavior
+// Now, any console.log statements in your main process will be written to a file.
+console.log = log.log;
+console.error = log.error;
+console.warn = log.warn;
+console.info = log.info;
 const store = new Store();
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -177,13 +185,8 @@ ipcMain.handle("export-watchlist-json",async  (event, { watchlist, filename }) =
   try {
     // --- Part 1: Interact with the COM object using winax ---
     console.log("Connecting to Broker.Application...");
-    // Use a try/catch specifically for the COM object in case it's not available
-    try {
-        ab = new winax.Object("Broker.Application");
-    } catch (comError) {
-        console.error("Failed to create COM object 'Broker.Application'. Is the software installed and running?", comError);
-        throw new Error("Could not connect to Broker.Application. Please ensure it is installed.");
-    }
+    ab = new winax.Object("Broker.Application", { activate: true });
+    console.log("Successfully created a new instance.");
 
     console.log("Successfully connected. Processing watchlist...");
 
@@ -194,17 +197,11 @@ ipcMain.handle("export-watchlist-json",async  (event, { watchlist, filename }) =
     watchlist['items'].forEach(item => {
 
       const symbol = getTradingSymbol(item);
-
-      if (symbol) {
-        console.log(`Adding symbol: ${symbol}`);
-        let stk = ab.Stocks.Add(symbol);
-        stk.FullName = item.trading_symbol.replace(/\s+/g,'');
-        item.trading_symbol=symbol;
-      } 
+      item.trading_symbol=symbol;      
     });
-
+    
     console.log("Finished processing watchlist with COM object.");
-
+    
     // --- Part 2: Your existing logic to save the file ---
     const jsonData = convertToJson(watchlist);
     const credentials = store.get('credentials');
@@ -212,21 +209,29 @@ ipcMain.handle("export-watchlist-json",async  (event, { watchlist, filename }) =
     const filePath = path.join(exportPath, filename);
     const backfillPath = path.join(exportPath, "data_backfill");
     try {
-        // Ensure the root data directory exists before starting
-        fs.mkdirSync(backfillPath, { recursive: true });
-        console.log('info', `Data will be saved in '${backfillPath}' directory.`);
-        
-        // Call the main function with the list of items and the root path.
-        await fetchAndStoreData(watchlist['items'], backfillPath);
+      // Ensure the root data directory exists before starting
+      fs.mkdirSync(backfillPath, { recursive: true });
+      console.log('info', `Data will be saved in '${backfillPath}' directory.`);
+      
+      // Call the main function with the list of items and the root path.
+      await fetchAndStoreData(watchlist['items'], backfillPath);
     } catch (error) {
-        console.log('error', `An unexpected top-level error occurred: ${error.stack}`);
+      console.log('error', `An unexpected top-level error occurred: ${error.stack}`);
     }
+    watchlist['items'].forEach(item => {
+
+      if (item.trading_symbol) {
+        console.log(`Adding symbol: ${item.trading_symbol}`);
+        let stk = ab.Stocks.Add(item.trading_symbol);
+        stk.FullName = item.trading_symbol.replace(/\s+/g,'');
+      } 
+    });
     fs.writeFileSync(filePath, jsonData);
     sendToPipe("MyTestPipe", "Final");
     console.log(`Watchlist successfully saved to ${filePath}`);
     // --- Part 3: Return success ---
     return { success: true, path: filePath, message: 'Watchlist processed and exported successfully.' };
-
+    
   } catch (error) {
     console.error("An error occurred during watchlist processing:", error);
     return { success: false, error: error.message };
@@ -270,46 +275,4 @@ ipcMain.on('close-window', () => {
 app.whenReady().then(() => {
   createLoadingScreen(); // Call the acreen first
   createWindow();
-});
-
-// MODIFIED 'before-quit' event handler
-app.on("before-quit", (event) => {
-  if (isQuitting) {
-    return;
-  }
-  event.preventDefault();
-  isQuitting = true;
-  
-  console.log("Closing all windows...");
-  BrowserWindow.getAllWindows().forEach(window => window.destroy());
-
-  // Use setTimeout to allow window 'destroy' events to process before starting the task
-  setTimeout(() => {
-    console.log("Starting background cleanup task...");
-    
-    const itemsToProcess = Array.from({ length: 1 }, (_, i) => i + 1);
-    const totalItems = itemsToProcess.length;
-    let processedCount = 0;
-
-    function processBatchInBackground() {
-      const batchSize = 10;
-      let itemsInBatch = 0;
-      while (processedCount < totalItems && itemsInBatch < batchSize) {
-        // Your actual processing logic for an item goes here
-        console.log(`Processing item ${processedCount + 1} in the background...`);
-        processedCount++;
-        itemsInBatch++;
-      }
-
-      if (processedCount < totalItems) {
-        process.nextTick(processBatchInBackground);
-      } else {
-        console.log("Background cleanup finished. Quitting app.");
-        app.exit();
-      }
-    }
-    
-    // Start the first batch
-    processBatchInBackground();
-  }, 100); // A 100ms delay should be sufficient
 });
