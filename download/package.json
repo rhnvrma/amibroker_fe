@@ -83,7 +83,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.21",
-    "electron": "25.0.0",
+    "electron": "^25.0.0",
     "electron-builder": "^24.6.4",
     "electron-rebuild": "^3.2.9",
     "genkit-cli": "^1.14.1",

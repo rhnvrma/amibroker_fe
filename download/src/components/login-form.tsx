@@ -7,28 +7,28 @@ import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
- Form,
- FormControl,
- FormField,
- FormItem,
- FormLabel,
- FormMessage,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
 import {
- Card,
- CardContent,
- CardDescription,
- CardFooter,
- CardHeader,
- CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { isElectron } from "@/lib/utils";
 
+// 1. Removed apiSecret from the validation schema
 const formSchema = z.object({
   rootFolder: z.string().min(1, "Root folder is required."),
   apiKey: z.string().min(1, "API key is required."),
-  apiSecret: z.string().min(1, "API secret is required."),
   mobileNumber: z.string().min(10, "Mobile number must be at least 10 digits."),
   pin: z.string().min(4, "PIN must be at least 4 digits."),
   toptSecret: z.string().min(1, "TOPT Secret is required."),
@@ -48,22 +48,26 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(formSchema),
+    // 2. Removed apiSecret from default values
     defaultValues: {
       rootFolder: "",
       apiKey: "",
-      apiSecret: "",
       mobileNumber: "",
       pin: "",
       toptSecret: "",
       autoAddSymbols: true,
     },
+    // Set mode to 'onChange' to see validation errors as you type
+    mode: "onChange",
   });
 
   useEffect(() => {
     const checkCredentials = async () => {
-      const savedCredentials = await window.electron.getCredentials();
-      if (savedCredentials) {
-        form.reset(savedCredentials);
+      if (isElectron()) {
+        const savedCredentials = await window.electron.getCredentials();
+        if (savedCredentials) {
+          form.reset(savedCredentials);
+        }
       }
     };
     checkCredentials();
@@ -71,9 +75,11 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
 
   const handleSelectFolder = async () => {
     try {
-      const folderPath = await window.electron.selectFolder();
-      if (folderPath) {
-        form.setValue("rootFolder", folderPath, { shouldValidate: true });
+      if (isElectron()) {
+        const folderPath = await window.electron.selectFolder();
+        if (folderPath) {
+          form.setValue("rootFolder", folderPath, { shouldValidate: true });
+        }
       }
     } catch (error) {
       console.error("Failed to select folder:", error);
@@ -89,19 +95,21 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
     setIsLoading(true);
     setAccessToken(null);
     try {
-      const response = await window.electron.login(data);
-      console.log("Response from Electron main process:", response);
-      if (response && response.success) {
-        await window.electron.saveCredentials(data);
-        setAccessToken(response.token);
-        toast({
-          title: "Login Successful",
-          description: "Credentials saved.",
-        });
-        onLoginSuccess();
-      } else {
-        throw new Error(response.error || "An unknown error occurred on the server.");
-      }
+        if (isElectron()){
+            const response = await window.electron.login(data);
+            console.log("Response from Electron main process:", response);
+            if (response && response.success) {
+              await window.electron.saveCredentials(data);
+              setAccessToken(response.token);
+              toast({
+                title: "Login Successful",
+                description: "Credentials saved.",
+              });
+              onLoginSuccess();
+            } else {
+              throw new Error(response.error || "An unknown error occurred on the server.");
+            }
+        }
     } catch (error) {
       toast({
         variant: "destructive",
@@ -113,6 +121,7 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
       setIsLoading(false);
     }
   }
+
   return (
     <Card className="w-full max-w-lg border-0 shadow-none">
       <CardHeader>
@@ -161,19 +170,6 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
                 </FormItem>
               )}
             />
-            {/* <FormField
-              control={form.control}
-              name="apiSecret"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>API secret</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Enter your API secret" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            /> */}
             <FormField
               control={form.control}
               name="mobileNumber"
@@ -216,14 +212,38 @@ export function LoginForm({ onLoginSuccess }: LoginFormProps) {
           </CardContent>
           <CardFooter className="flex flex-col items-start gap-4">
             <div className="w-full flex flex-col sm:flex-row items-center gap-2">
-              <Button type="submit" disabled={isLoading} className="w-full sm:w-auto grow">
+              {/* 3. Updated the Login Button's disabled prop */}
+              <Button
+                type="submit"
+                disabled={isLoading || !form.formState.isValid}
+                className="w-full sm:w-auto grow"
+              >
                 {isLoading ? "Logging in..." : "Login"}
+              </Button>
+              {/* 4. Added a manual validation button */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => form.trigger()}
+              >
+                Check Validation
               </Button>
             </div>
             {accessToken && (
               <div className="w-full p-3 bg-muted rounded-md">
                 <p className="text-sm font-semibold text-foreground">Access Token:</p>
                 <p className="text-xs text-muted-foreground break-all">{accessToken}</p>
+              </div>
+            )}
+            {/* 5. Kept the error display */}
+            {Object.keys(form.formState.errors).length > 0 && (
+              <div className="w-full p-3 bg-destructive/20 rounded-md">
+                <p className="text-sm font-semibold text-destructive-foreground">
+                  Validation Errors:
+                </p>
+                <pre className="text-xs text-destructive-foreground break-all">
+                  {JSON.stringify(form.formState.errors, null, 2)}
+                </pre>
               </div>
             )}
           </CardFooter>

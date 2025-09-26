@@ -27,23 +27,6 @@ const isDev = process.env.NODE_ENV === 'development';
 let mainWindow;
 let loadingWindow;
 let isQuitting = false; // Add this flag
-const gotTheLock = app.requestSingleInstanceLock();
-
-if (!gotTheLock) {
-  // If we don't get the lock, another instance is already running.
-  // Quit this new instance.
-  app.quit();
-} else {
-  // If we get the lock, this is the primary instance.
-  // Set up a listener for when another instance is launched.
-  app.on('second-instance', (event, commandLine, workingDirectory) => {
-    // Someone tried to run a second instance, we should focus our window.
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-}
 
 function createLoadingScreen() {
   loadingWindow = new BrowserWindow({
@@ -226,6 +209,7 @@ ipcMain.handle("export-watchlist-json",async  (event, { watchlist, filename }) =
         stk.FullName = item.trading_symbol.replace(/\s+/g,'');
       } 
     });
+    ab.SaveDatabase()
     fs.writeFileSync(filePath, jsonData);
     sendToPipe("MyTestPipe", "Final");
     console.log(`Watchlist successfully saved to ${filePath}`);
