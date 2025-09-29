@@ -166,6 +166,7 @@ ipcMain.handle('save-credentials', async (event, credentials) => {
 ipcMain.handle("export-watchlist-json",async  (event, { watchlist, filename }) => {
   let ab;
   try {
+    store.set('last-active-watchlist', watchlist);
     // --- Part 1: Interact with the COM object using winax ---
     console.log("Connecting to Broker.Application...");
     ab = new winax.Object("Broker.Application", { activate: true });
@@ -259,4 +260,53 @@ ipcMain.on('close-window', () => {
 app.whenReady().then(() => {
   createLoadingScreen(); // Call the acreen first
   createWindow();
+});
+app.on("before-quit", async (event) => {
+    if (isQuitting) {
+        return;
+    }
+    event.preventDefault(); // Prevent the app from quitting immediately
+    isQuitting = true;
+
+    console.log("Preparing to quit. Starting background data backfill...");
+
+    // Close all windows to give a visual indication that the app is closing
+    BrowserWindow.getAllWindows().forEach(window => window.destroy());
+
+    try {
+        // 1. Retrieve the last known watchlist and credentials from the store
+        const watchlist = store.get('last-active-watchlist');
+        const credentials = store.get('credentials');
+
+        // 2. Check if we have the necessary data to proceed
+        if (!watchlist || !watchlist.items || watchlist.items.length === 0) {
+            console.log("No watchlist found or watchlist is empty. Skipping backfill.");
+            app.quit(); // Exit without doing anything
+            return;
+        }
+
+        if (!credentials || !credentials.rootFolder) {
+            console.error("Root folder not configured in credentials. Cannot perform backfill.");
+            app.quit(); // Exit if config is missing
+            return;
+        }
+
+        // 3. Construct the path for backfill data
+        const backfillPath = path.join(credentials.rootFolder, "data_backfill");
+        
+        // Ensure the directory exists
+        fs.mkdirSync(backfillPath, { recursive: true });
+        console.log(`Data backfill will be saved in '${backfillPath}' directory.`);
+        
+        // 4. Execute the backfill operation
+        console.log(`Starting backfill for ${watchlist.items.length} items...`);
+        await fetchAndStoreData(watchlist.items, backfillPath);
+        console.log("Background data backfill finished successfully.");
+
+    } catch (error) {
+        console.error('An error occurred during the pre-quit backfill process:', error.stack);
+    } finally {
+        console.log("Exiting application.");
+        app.quit(); // Force the app to quit now
+    }
 });

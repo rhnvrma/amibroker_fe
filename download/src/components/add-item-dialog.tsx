@@ -75,15 +75,19 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
     return [];
   }, [selectedSegment, instrumentData]);
 
-  const { expiryOptions, strikeOptions } = useMemo(() => {
+const { expiryOptions, strikeOptions } = useMemo(() => {
     if (!selectedSegment || !selectedUnderlying) return { expiryOptions: [], strikeOptions: [] };
     const underlyingMap = instrumentData.get(selectedSegment);
     if (!underlyingMap) return { expiryOptions: [], strikeOptions: [] };
     const instrument = underlyingMap.get(selectedUnderlying);
     if (!instrument) return { expiryOptions: [], strikeOptions: [] };
     return {
-      expiryOptions: Array.from(instrument.expiries),
-      strikeOptions: Array.from(instrument.strikes).map(String),
+      // Sort expiry dates chronologically (string sort works for YYYY-MM-DD)
+      expiryOptions: Array.from(instrument.expiries).sort((a, b) => a.localeCompare(b)),
+      // Sort strikes numerically, then map to string
+      strikeOptions: Array.from(instrument.strikes)
+        .sort((a, b) => a - b)
+        .map(String),
     };
   }, [selectedSegment, selectedUnderlying, instrumentData]);
 
@@ -119,6 +123,9 @@ export function AddItemDialog({ children }: AddItemDialogProps) {
           item.strike_price.toString().toLowerCase().includes(term)
         );
       });
+    }
+    if (selectedUnderlying) {
+      items.sort((a, b) => a.strike_price - b.strike_price);
     }
     return items;
   }, [searchTerm, activeWatchlist, availableItems, selectedSegment, selectedUnderlying, selectedExpiry, selectedStrike]);

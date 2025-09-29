@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { WatchlistItem } from "@/lib/types";
@@ -12,7 +11,7 @@ import {
 } from "@/components/ui/table";
 import { ItemActions } from "./item-actions";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useRef } from "react";
+import { useRef, useState } from "react"; // 👈 Make sure useState is imported
 import { Checkbox } from "./ui/checkbox";
 import { Button } from "./ui/button";
 import { ArrowUpDown } from "lucide-react";
@@ -49,18 +48,20 @@ export function WatchlistTable({
     setSortDirection
 }: WatchlistTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+  // ✅ 1. Add state for last selected index
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
 
   const rowVirtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 65, // Estimate height of a row
+    estimateSize: () => 65,
     gap: 0,
   });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "INR", // This can be adapted based on instrument currency
+      currency: "INR",
     }).format(value);
   };
 
@@ -72,12 +73,31 @@ export function WatchlistTable({
     setSelectedItemIds(checked ? items.map(item => item.id) : []);
   };
 
-  const handleSelectRow = (id: string, checked: boolean) => {
-    setSelectedItemIds(
-      checked
-        ? [...selectedItemIds, id]
-        : selectedItemIds.filter(itemId => itemId !== id)
-    );
+  // ✅ 2. Replace handleSelectRow with a new unified handler
+  const handleRowClick = (
+    clickedIndex: number,
+    clickedId: string,
+    event: React.MouseEvent
+  ) => {
+    // Handle Shift-Click for range selection
+    if (event.nativeEvent.shiftKey && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, clickedIndex);
+      const end = Math.max(lastSelectedIndex, clickedIndex);
+      const rangeIds = items.slice(start, end + 1).map(item => item.id);
+
+      const selection = new Set(selectedItemIds);
+      rangeIds.forEach(id => selection.add(id));
+      setSelectedItemIds(Array.from(selection));
+    } else {
+      // Handle a regular single click
+      const isSelected = selectedItemIds.includes(clickedId);
+      setSelectedItemIds(
+        isSelected
+          ? selectedItemIds.filter(id => id !== clickedId)
+          : [...selectedItemIds, clickedId]
+      );
+      setLastSelectedIndex(clickedIndex);
+    }
   };
   
   const isAllSelected = items.length > 0 && selectedItemIds.length === items.length;
@@ -98,10 +118,10 @@ export function WatchlistTable({
           <TableRow className="flex w-full">
             <TableHead className="p-2 w-[4%] flex-shrink-0">
                <Checkbox 
-                checked={isAllSelected}
-                onCheckedChange={handleSelectAll}
-                aria-label="Select all rows"
-                className="translate-y-[2px]"
+                 checked={isAllSelected}
+                 onCheckedChange={handleSelectAll}
+                 aria-label="Select all rows"
+                 className="translate-y-[2px]"
                />
             </TableHead>
             {tableColumns.map(col => (
@@ -124,8 +144,10 @@ export function WatchlistTable({
             const isSelected = selectedItemIds.includes(item.id);
             return (
               <TableRow 
-                key={item.id} 
-                className="absolute w-full hover:bg-muted/50 flex items-center"
+                key={item.id}
+                // ✅ 3. Update the JSX
+                onClick={(e) => handleRowClick(virtualItem.index, item.id, e)}
+                className="absolute w-full hover:bg-muted/50 flex items-center cursor-pointer"
                 data-state={isSelected ? "selected" : ""}
                 style={{
                   height: `${virtualItem.size}px`,
@@ -135,9 +157,8 @@ export function WatchlistTable({
                 <TableCell className="p-2 w-[4%] flex-shrink-0">
                   <Checkbox 
                     checked={isSelected}
-                    onCheckedChange={(checked) => handleSelectRow(item.id, !!checked)}
                     aria-label={`Select row for ${item.name}`}
-                    className="translate-y-[2px]"
+                    className="translate-y-[2px] pointer-events-none"
                   />
                 </TableCell>
                 <TableCell className="w-[25%] p-2 flex-shrink-0">

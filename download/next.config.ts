@@ -9,3 +9,4 @@ const nextConfig: NextConfig = {
   assetPrefix: isElectron ? '.' : undefined,
   basePath: isElectron ? '' : undefined,
 };
+module.exports = nextConfig;
